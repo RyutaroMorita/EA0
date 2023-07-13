@@ -76,6 +76,11 @@
 #define LOOP_REF		ULONG_C(1000000)	/* 速度計測用のループ回数 */
 #endif /* LOOP_REF */
 
+#define INHNO_USCI_A1   (USCI_A1_VECTOR - 1)
+#define INTNO_USCI_A1   (USCI_A1_VECTOR - 1)
+#define INTATR_USCI_A1  (TA_ENAINT)         /* 割込み属性    */
+#define INTPRI_USCI_A1  (-1)                /* 割込み優先度   */
+
 /*
  *  関数のプロトタイプ宣言
  */

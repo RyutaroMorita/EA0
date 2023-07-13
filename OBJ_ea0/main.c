@@ -44,7 +44,10 @@
 #include <stdlib.h>
 
 #include <kernel.h>
+#include <msp430.h>
 #include "kernel_cfg.h"
+#include "driverlib.h"
+#include "nosio.h"
 
 #include "main.h"
 
@@ -59,6 +62,8 @@
 
 extern void target_fput_log(char c);
 
+NOSIO_HandleTypeDef usci_a1;
+
 /**
   * @brief  Retargets the C library printf function to the USART.
   * @param  None
@@ -72,6 +77,22 @@ PUTCHAR_PROTOTYPE
     return ch;
 }
 
+void nosio_isr(intptr_t exinf)
+{
+    NOSIO_IRQHandler(&usci_a1);
+}
+
+static void main_init(void)
+{
+    GPIO_setAsPeripheralModuleFunctionInputPin(
+            GPIO_PORT_P4,
+            GPIO_PIN4+GPIO_PIN5
+    );
+
+    usci_a1.reg = (uint32_t)USCI_A1_BASE;
+    ini_sio(&usci_a1, "9600 B8 PN S1");
+    ctl_sio(&usci_a1, TSIO_RXE | TSIO_TXE | TSIO_DTRON | TSIO_RTSON);
+}
 /*
  *  printf()やsprintf()で「%f」や「%g」を使用する場合は
  *  リンカのオプションとして「-u _printf_float」を追記すること
@@ -82,7 +103,18 @@ void main_task(intptr_t exinf)
 //    uint32_t tmp = 123456789U;
     float tmp = 1.23456;
     int count = 0;
+    uint8_t* p;
+    uint8_t c;
+    int i;
+
+    main_init();
+
+    //printf("EA0 start.\r\n", tmp);
+
+    strcpy(buf, "TEST MESSAGE\r\n");
+
     while (1) {
+#if 0
 //        printf("%d - Test Message\r\n", count);
 //        printf("%ld - Test Message\r\n", tmp);
         printf("%g - Test Message\r\n", tmp);
@@ -91,5 +123,18 @@ void main_task(intptr_t exinf)
         //printf(buf);
         count++;
         dly_tsk(1000);
+#endif
+
+        if (E_OK == get_sio(&usci_a1, &c, 1000)) {
+            put_sio(&usci_a1, c, 10);
+        }
+
+        p = &buf[0];
+        for (i = 0; i < strlen(buf); i++) {
+            put_sio(&usci_a1, *p, 1000);
+            p++;
+        }
+//        dly_tsk(1000);
+
     }
 }
