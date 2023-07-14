@@ -42,14 +42,14 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <kernel.h>
 #include <msp430.h>
 #include "kernel_cfg.h"
 #include "driverlib.h"
-#include "nosio.h"
-
 #include "main.h"
+#include "t_usci.h"
 
 
 #ifdef __GNUC__
@@ -62,7 +62,7 @@
 
 extern void target_fput_log(char c);
 
-NOSIO_HandleTypeDef usci_a1;
+USCI_HandleTypeDef usci_a1;
 
 /**
   * @brief  Retargets the C library printf function to the USART.
@@ -77,64 +77,54 @@ PUTCHAR_PROTOTYPE
     return ch;
 }
 
-void nosio_isr(intptr_t exinf)
+void uusci_a1_isr(intptr_t exinf)
 {
-    NOSIO_IRQHandler(&usci_a1);
+    usci_isr(&usci_a1);
 }
 
 static void main_init(void)
 {
+    // USCI_A1
     GPIO_setAsPeripheralModuleFunctionInputPin(
             GPIO_PORT_P4,
-            GPIO_PIN4+GPIO_PIN5
+            GPIO_PIN4 + GPIO_PIN5
+    );
+
+    // I2C
+    GPIO_setAsPeripheralModuleFunctionInputPin(
+            GPIO_PORT_P4,
+            GPIO_PIN1 + GPIO_PIN2
     );
 
     usci_a1.reg = (uint32_t)USCI_A1_BASE;
     ini_sio(&usci_a1, "9600 B8 PN S1");
-    ctl_sio(&usci_a1, TSIO_RXE | TSIO_TXE | TSIO_DTRON | TSIO_RTSON);
+    ctl_sio(&usci_a1, TUSCI_RXE | TUSCI_TXE | TUSCI_DTRON | TUSCI_RTSON);
 }
+
 /*
  *  printf()やsprintf()で「%f」や「%g」を使用する場合は
  *  リンカのオプションとして「-u _printf_float」を追記すること
  */
 void main_task(intptr_t exinf)
 {
-    uint8_t buf[16];
-//    uint32_t tmp = 123456789U;
+    uint8_t buf[32];
     float tmp = 1.23456;
-    int count = 0;
     uint8_t* p;
-    uint8_t c;
     int i;
+    uint8_t c;
 
     main_init();
 
-    //printf("EA0 start.\r\n", tmp);
-
-    strcpy(buf, "TEST MESSAGE\r\n");
+    sprintf((char*)buf, "sprintf() Test = %g\r\n", tmp);
+    p = &buf[0];
+    for (i = 0; i < strlen((const char*)buf); i++) {
+        put_sio(&usci_a1, *p, 10);
+        p++;
+    }
 
     while (1) {
-#if 0
-//        printf("%d - Test Message\r\n", count);
-//        printf("%ld - Test Message\r\n", tmp);
-        printf("%g - Test Message\r\n", tmp);
-        tmp += 0.00001;
-        //sprintf(buf, "%d\r\n", count);
-        //printf(buf);
-        count++;
-        dly_tsk(1000);
-#endif
-
         if (E_OK == get_sio(&usci_a1, &c, 1000)) {
             put_sio(&usci_a1, c, 10);
         }
-
-        p = &buf[0];
-        for (i = 0; i < strlen(buf); i++) {
-            put_sio(&usci_a1, *p, 1000);
-            p++;
-        }
-//        dly_tsk(1000);
-
     }
 }

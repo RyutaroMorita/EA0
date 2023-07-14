@@ -1,7 +1,7 @@
 //_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/
 //
 //		MSP430用シリアル通信ドライバ
-//		nosio.c (Ver.00.00.00)
+//		t_usci.c (Ver.00.00.00)
 //
 //		2023/07/13	Ver.00.00.00	初版
 //
@@ -11,16 +11,9 @@
 
 #include <kernel.h>
 #include <msp430.h>
-#include <sil.h>
-
- #ifdef TOPPERS_ASP
-  #define PSW         PRI
- #else
-  #define PSW         UINT
- #endif
-
 #include "driverlib.h"
-#include "nosio.h"
+
+#include "t_usci.h"
 
 /* 送受信バッファサイズの定義 */
 
@@ -35,31 +28,27 @@
 
 /* 内部変数 */
 
-static bool_t tx_ready = false;
 
 /*****************************************************************************
 * シリアル入出力制御ブロック初期化（内部関数）
 *
 ******************************************************************************/
 
-static void init_buf(NOSIO_HandleTypeDef* nosio)
+static void init_buf(USCI_HandleTypeDef* usci)
 {
 	int init;
 
 	/* 制御ブロッククリア */
 
-	init = nosio->sio.flag & TSF_INIT;
-	memset(&nosio->sio, 0, sizeof(T_SIO));
-	nosio->sio.flag = (uint8_t)init;
+	init = usci->uscib.flag & TSF_INIT;
+	memset(&usci->uscib, 0, sizeof(T_USCIB));
+	usci->uscib.flag = (uint8_t)init;
 
 	/* ポインタ類セットアップ */
 
-	nosio->sio.txbuf = nosio->txbuf;		/* 送信バッファ */
-	nosio->sio.rxbuf = nosio->rxbuf;		/* 受信バッファ */
-	nosio->sio.txputp = nosio->sio.txbuf;	/* 送信バッファ格納ポインタ初期値 */
-	nosio->sio.txgetp = nosio->sio.txbuf;	/* 送信バッファ取得ポインタ初期値 */
-	nosio->sio.rxputp = nosio->sio.rxbuf;	/* 受信バッファ格納ポインタ初期値 */
-	nosio->sio.rxgetp = nosio->sio.rxbuf;	/* 受信バッファ取得ポインタ初期値 */
+	usci->uscib.rxbuf = usci->rxbuf;		/* 受信バッファ */
+	usci->uscib.rxputp = usci->uscib.rxbuf;	/* 受信バッファ格納ポインタ初期値 */
+	usci->uscib.rxgetp = usci->uscib.rxbuf;	/* 受信バッファ取得ポインタ初期値 */
 }
 
 /*****************************************************************************
@@ -68,28 +57,28 @@ static void init_buf(NOSIO_HandleTypeDef* nosio)
 * DSR, CD は 無いので常時 1 とする
 ******************************************************************************/
 
-static int get_stat(NOSIO_HandleTypeDef* nosio)
+static int get_stat(USCI_HandleTypeDef* usci)
 {
 	int stat;
 	int sr;
 
 	/* ステータス入力 */
 
-	sr = USCI_A_UART_queryStatusFlags(nosio->reg, (UCBRK|UCOE|UCFE|UCPE));
-	sr |= (nosio->sio.rxsts & (UCPE|UCFE));	/* 受信時のステータスとOR */
+	sr = USCI_A_UART_queryStatusFlags(usci->reg, (UCBRK|UCOE|UCFE|UCPE));
+	sr |= (usci->uscib.rxsts & (UCPE|UCFE));	/* 受信時のステータスとOR */
 
 	/* ステータスビット編集 */
 
-	stat = TSIO_DSR|TSIO_CD;		/* DSR, CD 常時ON */
+	stat = TUSCI_DSR|TUSCI_CD;  /* DSR, CD 常時ON */
 
-	if (sr & UCPE)			        /* パリティエラー */
-		stat |= TSIO_PE;
-	if (sr & UCOE)			        /* オーバーランエラー */
-		stat |= TSIO_OE;
-	if (sr & UCFE)			        /* フレーミングエラー */
-		stat |= TSIO_FE;
+	if (sr & UCPE)			    /* パリティエラー */
+		stat |= TUSCI_PE;
+	if (sr & UCOE)			    /* オーバーランエラー */
+		stat |= TUSCI_OE;
+	if (sr & UCFE)			    /* フレーミングエラー */
+		stat |= TUSCI_FE;
 	if (sr & UCBRK)
-		stat |= TSIO_BD;
+		stat |= TUSCI_BD;
 
 	return stat;
 }
@@ -98,7 +87,7 @@ static int get_stat(NOSIO_HandleTypeDef* nosio)
 * ＳＩＯデバイス初期化（内部関数）
 *
 ******************************************************************************/
-static int init_sio(NOSIO_HandleTypeDef* nosio, uint8_t parity, uint8_t numberofStopBits, uint32_t baud)
+static int init_sio(USCI_HandleTypeDef* usci, uint8_t parity, uint8_t numberofStopBits, uint32_t baud)
 {
     // From Table 36-4 in the family user's manual where UCOS16 = 0 and
     //            baudrate = 9600
@@ -142,10 +131,10 @@ static int init_sio(NOSIO_HandleTypeDef* nosio, uint8_t parity, uint8_t numberof
     param.uartMode = USCI_A_UART_MODE;
     param.overSampling = USCI_A_UART_LOW_FREQUENCY_BAUDRATE_GENERATION;     // UCOS16 = 0
 
-    USCI_A_UART_init(nosio->reg, &param);
+    USCI_A_UART_init(usci->reg, &param);
 
     //Enable UART module for operation
-    USCI_A_UART_enable(nosio->reg);
+    USCI_A_UART_enable(usci->reg);
 
 	return true;
 }
@@ -155,15 +144,19 @@ static int init_sio(NOSIO_HandleTypeDef* nosio, uint8_t parity, uint8_t numberof
 *
 ******************************************************************************/
 
-static void dis_int_sio(NOSIO_HandleTypeDef* nosio)
+static void dis_int_sio(USCI_HandleTypeDef* usci)
 {
     USCI_A_UART_disableInterrupt(
-            nosio->reg,
+            usci->reg,
             USCI_A_UART_TRANSMIT_INTERRUPT
     );
     USCI_A_UART_disableInterrupt(
-            nosio->reg,
+            usci->reg,
             USCI_A_UART_RECEIVE_INTERRUPT
+    );
+    USCI_A_UART_disableInterrupt(
+            usci->reg,
+            USCI_A_UART_RECEIVE_ERRONEOUSCHAR_INTERRUPT
     );
 }
 
@@ -172,89 +165,35 @@ static void dis_int_sio(NOSIO_HandleTypeDef* nosio)
 *
 ******************************************************************************/
 
-static void ena_int_sio(NOSIO_HandleTypeDef* nosio)
+static void ena_int_sio(USCI_HandleTypeDef* usci)
 {
     USCI_A_UART_enableInterrupt(
-            nosio->reg,
+            usci->reg,
             USCI_A_UART_TRANSMIT_INTERRUPT
     );
     USCI_A_UART_enableInterrupt(
-            nosio->reg,
+            usci->reg,
             USCI_A_UART_RECEIVE_INTERRUPT
     );
-}
-
-/*****************************************************************************
-* 送信バッファクリア（内部関数）
-*
-******************************************************************************/
-
-static void clr_txbuf(NOSIO_HandleTypeDef* nosio)
-{
-	/* 送信バッファクリア */
-
-	nosio->sio.txcnt = 0;
-	nosio->sio.txgetp = nosio->sio.txputp;
+    USCI_A_UART_enableInterrupt(
+            usci->reg,
+            USCI_A_UART_RECEIVE_ERRONEOUSCHAR_INTERRUPT
+    );
 }
 
 /*****************************************************************************
 * 受信バッファクリア（内部関数）
 *
 ******************************************************************************/
-static void clr_rxbuf(NOSIO_HandleTypeDef* nosio)
+static void clr_rxbuf(USCI_HandleTypeDef* usci)
 {
 	/* 受信バッファクリア */
 
-	nosio->sio.rxsts = 0;
-	nosio->sio.oldsts = 0;
-	nosio->sio.eotcnt = 0;
-	nosio->sio.rxcnt = 0;
-	nosio->sio.rxgetp = nosio->sio.rxputp;
-}
-
-/*****************************************************************************
-* 送信バッファへ１文字格納（内部関数）
-*
-* バッファ満杯で格納できなかった場合は、FALSE を返す。
-******************************************************************************/
-static void tx_ctx(NOSIO_HandleTypeDef* nosio);
-
-static int put_txbuf(NOSIO_HandleTypeDef* nosio, uint8_t c)
-{
-	uint8_t *p;
-
-	/* バッファ内文字数 + 1 */
-	/* バッファ満杯チェック */
-
-	if (++nosio->sio.txcnt > TXBUFSZ)
-	{
-		nosio->sio.txcnt = TXBUFSZ;
-		return false;
-	}
-
-	/* バッファへ格納 */
-
-	p = nosio->sio.txputp;
-	*p = c;
-
-	/* 格納ポインタを１つ進める */
-
-	if (++p >= nosio->sio.txbuf + TXBUFSZ)
-		p = nosio->sio.txbuf;
-	nosio->sio.txputp = p;
-
-	/* 送信割込み許可 */
-    USCI_A_UART_enableInterrupt(
-            nosio->reg,
-            USCI_A_UART_TRANSMIT_INTERRUPT
-    );
-
-    if (tx_ready) {
-        tx_ready = false;
-        tx_ctx(nosio);
-    }
-
-	return true;
+	usci->uscib.rxsts = 0;
+	usci->uscib.oldsts = 0;
+	usci->uscib.eotcnt = 0;
+	usci->uscib.rxcnt = 0;
+	usci->uscib.rxgetp = usci->uscib.rxputp;
 }
 
 /*****************************************************************************
@@ -262,41 +201,41 @@ static int put_txbuf(NOSIO_HandleTypeDef* nosio, uint8_t c)
 *
 ******************************************************************************/
 
-static void put_rxbuf(NOSIO_HandleTypeDef* nosio)
+static void put_rxbuf(USCI_HandleTypeDef* usci)
 {
 	int cnt;
 	uint8_t *p;
 
 	/* 連続ブレークなら格納しない */
 
-	if ((nosio->sio.rxsts & UCBRK) && (nosio->sio.oldsts & UCBRK))
+	if ((usci->uscib.rxsts & UCBRK) && (usci->uscib.oldsts & UCBRK))
 		return;
 
 	/* バッファ満杯チェック */
 
-	cnt = nosio->sio.rxcnt;
+	cnt = usci->uscib.rxcnt;
 	if (cnt == BUFSZ)
 		return;
 	if (++cnt == BUFSZ)
-		nosio->sio.rxsts |= UCBUSY;	/* オーバフローは UCBUSY に割り当て */
+		usci->uscib.rxsts |= UCBUSY;	/* オーバフローは UCBUSY に割り当て */
 
 	/* バッファ内文字数 + 1 */
 
-	nosio->sio.rxcnt = (uint16_t)cnt;
+	usci->uscib.rxcnt = (uint16_t)cnt;
 
 	/* バッファへ格納 */
 	/* 終端文字検出+1 */
 
-	p = nosio->sio.rxputp;
-	if ((*p = nosio->sio.rxchr) == nosio->sio.eot)
-		nosio->sio.eotcnt++;
-	*(p + BUFSZ) = nosio->sio.rxsts;
+	p = usci->uscib.rxputp;
+	if ((*p = usci->uscib.rxchr) == usci->uscib.eot)
+		usci->uscib.eotcnt++;
+	*(p + BUFSZ) = usci->uscib.rxsts;
 
 	/* 格納ポインタを１つ進める */
 
-	if (++p >= nosio->sio.rxbuf + BUFSZ)
-		p = nosio->sio.rxbuf;
-	nosio->sio.rxputp = p;
+	if (++p >= usci->uscib.rxbuf + BUFSZ)
+		p = usci->uscib.rxbuf;
+	usci->uscib.rxputp = p;
 }
 
 /*****************************************************************************
@@ -305,7 +244,7 @@ static void put_rxbuf(NOSIO_HandleTypeDef* nosio)
 * バッファ空で取得できなかった場合は、-1 を返す。
 ******************************************************************************/
 
-static int get_rxbuf(NOSIO_HandleTypeDef* nosio, uint8_t *c)
+static int get_rxbuf(USCI_HandleTypeDef* usci, uint8_t *c)
 {
 	int cnt;
 	int sts;
@@ -313,28 +252,28 @@ static int get_rxbuf(NOSIO_HandleTypeDef* nosio, uint8_t *c)
 
 	/* 受信バッファ空チェック */
 
-	cnt = nosio->sio.rxcnt;
+	cnt = usci->uscib.rxcnt;
 	if (--cnt == -1)
 		return cnt;
 
 	/* 受信バッファ内文字数 - 1 */
 
-	nosio->sio.rxcnt = (uint16_t)cnt;
+	usci->uscib.rxcnt = (uint16_t)cnt;
 
 
 	/* 受信バッファから取得 */
 	/* 終端文字検出数-1 */
 
-	p = nosio->sio.rxgetp;
-	if ((*c = *p) == nosio->sio.eot)
-		nosio->sio.eotcnt--;
+	p = usci->uscib.rxgetp;
+	if ((*c = *p) == usci->uscib.eot)
+		usci->uscib.eotcnt--;
 	sts = *(p + BUFSZ);
 
 	/* 取得ポインタを１つ進める */
 
-	if (++p >= nosio->sio.rxbuf + BUFSZ)
-		p = nosio->sio.rxbuf;
-	nosio->sio.rxgetp = p;
+	if (++p >= usci->uscib.rxbuf + BUFSZ)
+		p = usci->uscib.rxbuf;
+	usci->uscib.rxgetp = p;
 
 	return sts;
 }
@@ -344,7 +283,7 @@ static int get_rxbuf(NOSIO_HandleTypeDef* nosio, uint8_t *c)
 *
 ******************************************************************************/
 
-static void rx_int(NOSIO_HandleTypeDef* nosio)
+static void rx_int(USCI_HandleTypeDef* usci)
 {
 	int sts;
 	int chr;
@@ -352,88 +291,24 @@ static void rx_int(NOSIO_HandleTypeDef* nosio)
 
 	/* 受信ステータスと受信文字を入力 */
 
-	sts = USCI_A_UART_queryStatusFlags(nosio->reg, (UCBRK|UCOE|UCFE|UCPE));
-	chr = USCI_A_UART_receiveData(nosio->reg);
+	sts = USCI_A_UART_queryStatusFlags(usci->reg, (UCBRK|UCOE|UCFE|UCPE));
+	chr = USCI_A_UART_receiveData(usci->reg);
 
-	nosio->sio.oldsts = nosio->sio.rxsts;		/* 前回の受信ステータス記憶 */
-	nosio->sio.rxsts = (uint8_t)sts;
-	nosio->sio.rxchr = (uint8_t)chr;
+	usci->uscib.oldsts = usci->uscib.rxsts;		/* 前回の受信ステータス記憶 */
+	usci->uscib.rxsts = (uint8_t)sts;
+	usci->uscib.rxchr = (uint8_t)chr;
 
 	/* 受信バッファへ格納 */
 
-	put_rxbuf(nosio);
+	put_rxbuf(usci);
 
 	/* 受信待ち解除 */
 
-	if ((tid = nosio->sio.rxtid) != 0)
+	if ((tid = usci->uscib.rxtid) != 0)
 	{
-		nosio->sio.rxtid = 0;
+		usci->uscib.rxtid = 0;
 		iwup_tsk((ID)tid);
 	}
-}
-
-/*****************************************************************************
-* 送信割込みハンドラ本体（内部関数）
-*
-******************************************************************************/
-
-static void tx_int(NOSIO_HandleTypeDef* nosio)
-{
-	uint8_t *p;
-	int tid;
-
-	/* 送信バッファ内文字数 - 1 */
-	/* 送信バッファ空なら送信不可 */
-
-	if (--nosio->sio.txcnt == (uint16_t)-1)
-	{
-		nosio->sio.txcnt = 0;
-	    /* 送信終了待ち解除 */
-	    if ( nosio->sio.tetid != 0 )
-	        iwup_tsk(nosio->sio.tetid);
-		/* 送信割込み禁止 */
-        USCI_A_UART_disableInterrupt(
-                nosio->reg,
-                USCI_A_UART_TRANSMIT_INTERRUPT
-        );
-        tx_ready = true;
-		return;
-	}
-
-	/* １文字送信 */
-
-	p = nosio->sio.txgetp;
-	USCI_A_UART_transmitData(nosio->reg, *p);
-
-	/* 取得ポインタを１つ進める */
-
-	if (++p >= nosio->sio.txbuf + TXBUFSZ)
-		p = nosio->sio.txbuf;
-	nosio->sio.txgetp = p;
-
-	/* 送信待ち解除 */
-
-	if ((tid = nosio->sio.txtid) != 0)
-	{
-		nosio->sio.txtid = 0;
-		iwup_tsk((ID)tid);
-	}
-}
-
-static void tx_ctx(NOSIO_HandleTypeDef* nosio)
-{
-    uint8_t *p;
-
-    /* １文字送信 */
-
-    p = nosio->sio.txgetp;
-    USCI_A_UART_transmitData(nosio->reg, *p);
-
-    /* 取得ポインタを１つ進める */
-
-    if (++p >= nosio->sio.txbuf + TXBUFSZ)
-        p = nosio->sio.txbuf;
-    nosio->sio.txgetp = p;
 }
 
 /*****************************************************************************
@@ -441,19 +316,17 @@ static void tx_ctx(NOSIO_HandleTypeDef* nosio)
 *
 ******************************************************************************/
 
-//void nosio_isr(intptr_t exinf)
-void NOSIO_IRQHandler(NOSIO_HandleTypeDef* nosio)
+void usci_isr(USCI_HandleTypeDef* usci)
 {
     ID tid;
 
-    if (USCI_A_UART_getInterruptStatus(nosio->reg, USCI_A_UART_RECEIVE_INTERRUPT_FLAG)) {
-        rx_int(nosio);
-    } else {
-        USCI_A_UART_clearInterrupt(nosio->reg, USCI_A_UART_TRANSMIT_INTERRUPT_FLAG);
-        //tx_int(nosio);
-        if ((tid = nosio->sio.txtid) != 0)
-        {
-            nosio->sio.txtid = 0;
+    if (USCI_A_UART_getInterruptStatus(usci->reg, USCI_A_UART_RECEIVE_INTERRUPT_FLAG)) {
+        rx_int(usci);
+    } else
+    if (USCI_A_UART_getInterruptStatus(usci->reg, USCI_A_UART_TRANSMIT_INTERRUPT_FLAG)) {
+        USCI_A_UART_clearInterrupt(usci->reg, USCI_A_UART_TRANSMIT_INTERRUPT_FLAG);
+        if ((tid = usci->uscib.txtid) != 0) {
+            usci->uscib.txtid = 0;
             iwup_tsk((ID)tid);
         }
     }
@@ -523,17 +396,17 @@ static int set_param(const char *s, uint8_t* pParity, uint8_t* pNumberofStopBits
 *
 ******************************************************************************/
 
-ER ini_sio(NOSIO_HandleTypeDef* nosio, const char *param)
+ER ini_sio(USCI_HandleTypeDef* usci, const char *param)
 {
 	uint32_t baud;
 	uint8_t parity;
 	uint8_t numberofStopBits;
 
-	dis_int_sio(nosio);
+	dis_int_sio(usci);
 
 	/* 制御ブロック初期化 */
 
-	init_buf(nosio);
+	init_buf(usci);
 
 	/* パラメータ解析 */
 
@@ -542,20 +415,14 @@ ER ini_sio(NOSIO_HandleTypeDef* nosio, const char *param)
 
 	/* デバイス初期化 */
 
-	if (!init_sio(nosio, parity, numberofStopBits, baud))
+	if (!init_sio(usci, parity, numberofStopBits, baud))
 		return E_PAR;
 
 	/* 割込みハンドラの定義 */
-	nosio->sio.flag |= TSF_INIT;
+	usci->uscib.flag |= TSF_INIT;
 
-	/* 受信割込み許可 */
-/*
-    USCI_A_UART_enableInterrupt(
-            nosio->reg,
-            USCI_A_UART_RECEIVE_INTERRUPT
-    );
-*/
-	ena_int_sio(nosio);
+	/* 割込み許可 */
+	ena_int_sio(usci);
 
 	return E_OK;
 }
@@ -565,13 +432,13 @@ ER ini_sio(NOSIO_HandleTypeDef* nosio, const char *param)
 *
 ******************************************************************************/
 
-void ext_sio(NOSIO_HandleTypeDef* nosio)
+void ext_sio(USCI_HandleTypeDef* usci)
 {
-	if (!(nosio->sio.flag & TSF_INIT))	/* 未初期化なら何もしない */
+	if (!(usci->uscib.flag & TSF_INIT))	/* 未初期化なら何もしない */
 		return;
-	dis_int_sio(nosio);					/* シリアル割込み禁止 */
+	dis_int_sio(usci);					/* シリアル割込み禁止 */
 
-	nosio->sio.flag &= ~TSF_INIT;		/* 初期化済みフラグクリア */
+	usci->uscib.flag &= ~TSF_INIT;		/* 初期化済みフラグクリア */
 }
 
 /*****************************************************************************
@@ -579,7 +446,7 @@ void ext_sio(NOSIO_HandleTypeDef* nosio)
 *
 ******************************************************************************/
 
-ER get_sio(NOSIO_HandleTypeDef* nosio, uint8_t *c, TMO tmout)
+ER get_sio(USCI_HandleTypeDef* usci, uint8_t *c, TMO tmout)
 {
 	ER ercd;
 	int sts;
@@ -589,7 +456,7 @@ ER get_sio(NOSIO_HandleTypeDef* nosio, uint8_t *c, TMO tmout)
 	{
 		/* 受信バッファから１文字得る */
 
-		sts = get_rxbuf(nosio, c);
+		sts = get_rxbuf(usci, c);
 
 		if (sts != -1)              /* 受信文字あった場合 */
 		{
@@ -617,12 +484,12 @@ ER get_sio(NOSIO_HandleTypeDef* nosio, uint8_t *c, TMO tmout)
 		}
 
 		/* 受信割込み待ち */
-		get_tid(&nosio->sio.rxtid);
+		get_tid(&usci->uscib.rxtid);
 		Asm("nop");
 		Asm("eint");
 		Asm("nop");
 		ercd = tslp_tsk(tmout);
-		nosio->sio.rxtid = 0;
+		usci->uscib.rxtid = 0;
 		// 複数回 iwup_tsk された場合の対策
 		do {
 			wupcnt = can_wup(TSK_SELF);
@@ -637,7 +504,7 @@ ER get_sio(NOSIO_HandleTypeDef* nosio, uint8_t *c, TMO tmout)
 *
 ******************************************************************************/
 
-ER put_sio(NOSIO_HandleTypeDef* nosio, uint8_t c, TMO tmout)
+ER put_sio(USCI_HandleTypeDef* usci, uint8_t c, TMO tmout)
 {
 	ER ercd;
 	ER_UINT wupcnt;
@@ -645,13 +512,13 @@ ER put_sio(NOSIO_HandleTypeDef* nosio, uint8_t c, TMO tmout)
     Asm("nop");
     Asm("dint");
     Asm("nop");
-	USCI_A_UART_transmitData(nosio->reg, c);
-    get_tid(&nosio->sio.txtid);
+	USCI_A_UART_transmitData(usci->reg, c);
+    get_tid(&usci->uscib.txtid);
     Asm("nop");
     Asm("eint");
     Asm("nop");
     ercd = tslp_tsk(tmout);
-    nosio->sio.txtid = 0;
+    usci->uscib.txtid = 0;
     // 複数回 iwup_tsk された場合の対策
     do {
         wupcnt = can_wup(TSK_SELF);
@@ -659,39 +526,7 @@ ER put_sio(NOSIO_HandleTypeDef* nosio, uint8_t c, TMO tmout)
     if (ercd)
         return ercd;    /* タイムアウト終了 */
 
-#if 0
-	for (;;)
-	{
-	    Asm("nop");
-	    Asm("dint");
-	    Asm("nop");
-
-		/* 送信バッファへ１文字格納 */
-
-		if (put_txbuf(nosio, c))	/* 格納できた場合 */
-		{
-            Asm("nop");
-            Asm("eint");
-            Asm("nop");
-			return E_OK;	/* 正常終了 */
-		}
-
-		/* 送信割込み待ち */
-
-        get_tid(&nosio->sio.txtid);
-        Asm("nop");
-        Asm("eint");
-        Asm("nop");
-        ercd = tslp_tsk(tmout);
-		nosio->sio.txtid = 0;
-		// 複数回 iwup_tsk された場合の対策
-		do {
-			wupcnt = can_wup(TSK_SELF);
-		} while (wupcnt);
-		if (ercd)
-			return ercd;	/* タイムアウト終了 */
-	}
-#endif
+    return E_OK;
 }
 
 /*****************************************************************************
@@ -699,7 +534,7 @@ ER put_sio(NOSIO_HandleTypeDef* nosio, uint8_t c, TMO tmout)
 *
 ******************************************************************************/
 
-ER ctl_sio(NOSIO_HandleTypeDef* nosio, uint16_t fncd)
+ER ctl_sio(USCI_HandleTypeDef* usci, uint16_t fncd)
 {
     Asm("nop");
     Asm("dint");
@@ -707,10 +542,8 @@ ER ctl_sio(NOSIO_HandleTypeDef* nosio, uint16_t fncd)
 
 	/* バッファクリア */
 
-	if (fncd & TSIO_RXCLR)
-		clr_rxbuf(nosio);
-	if (fncd & TSIO_TXCLR)
-		clr_txbuf(nosio);
+	if (fncd & TUSCI_RXCLR)
+		clr_rxbuf(usci);
 
     Asm("nop");
     Asm("eint");
@@ -724,7 +557,7 @@ ER ctl_sio(NOSIO_HandleTypeDef* nosio, uint16_t fncd)
 *
 ******************************************************************************/
 
-ER ref_sio(NOSIO_HandleTypeDef* nosio, T_SIOS *pk_sios)
+ER ref_sio(USCI_HandleTypeDef* usci, T_USCIS *pk_sios)
 {
 	int stat;
 
@@ -732,57 +565,15 @@ ER ref_sio(NOSIO_HandleTypeDef* nosio, T_SIOS *pk_sios)
     Asm("dint");
     Asm("nop");
 
-	stat = get_stat(nosio);
-	if (nosio->sio.txcnt != 0)
-		stat &= ~TSIO_TXEMP;
+	stat = get_stat(usci);
 
 	pk_sios->siostat = (uint8_t)stat;
-	pk_sios->rxlen   = nosio->sio.rxcnt;
-	pk_sios->frbufsz = (uint16_t)(TXBUFSZ - nosio->sio.txcnt);
-	pk_sios->eotcnt  = nosio->sio.eotcnt;
+	pk_sios->rxlen   = usci->uscib.rxcnt;
+	pk_sios->eotcnt  = usci->uscib.eotcnt;
 
     Asm("nop");
     Asm("eint");
     Asm("nop");
 
     return E_OK;
-}
-
-/*****************************************************************************
-* シリアル送信バッファフラッシュ
-*
-******************************************************************************/
-
-ER fls_sio(NOSIO_HandleTypeDef* nosio, TMO tmout)
-{
-	ER ercd;
-	ER_UINT wupcnt;
-
-	for (;;)
-	{
-		if (nosio->sio.txcnt == 0)
-		{
-	        Asm("nop");
-	        Asm("eint");
-	        Asm("nop");
-			break;	/* 正常終了 */
-		}
-
-		/* 送信終了割込み待ち */
-
-		get_tid(&nosio->sio.tetid);
-        Asm("nop");
-        Asm("eint");
-        Asm("nop");
-		ercd = tslp_tsk(tmout);
-		nosio->sio.tetid = 0;
-		// 複数回 iwup_tsk された場合の対策
-		do {
-			wupcnt = can_wup(TSK_SELF);
-		} while (wupcnt);
-		if (ercd)
-			return ercd;	/* タイムアウト終了 */
-	}
-
-	return E_OK;
 }

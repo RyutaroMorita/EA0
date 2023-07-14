@@ -81,6 +81,11 @@
 #define INTATR_USCI_A1  (TA_ENAINT)         /* 割込み属性    */
 #define INTPRI_USCI_A1  (-1)                /* 割込み優先度   */
 
+#define INHNO_USCI_B1   (USCI_B1_VECTOR - 1)
+#define INTNO_USCI_B1   (USCI_B1_VECTOR - 1)
+#define INTATR_USCI_B1  (TA_ENAINT)         /* 割込み属性    */
+#define INTPRI_USCI_B1  (-1)                /* 割込み優先度   */
+
 /*
  *  関数のプロトタイプ宣言
  */
