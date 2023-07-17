@@ -25,6 +25,7 @@ typedef struct t_i2cb
 
     uint8_t adr;                /* アドレス */
     ID rdytid;                  /* READY待ちタスクＩＤ */
+    ID txtid;                   /* READY待ちタスクＩＤ */
     uint32_t cnt;               /* 送信バッファ内の文字数 */
     uint8_t *buf;               /* バッファのポインタ */
 } T_I2CB;
@@ -53,6 +54,7 @@ void ext_i2c(I2C_HandleTypeDef*);
 ER red_i2c(I2C_HandleTypeDef*, uint8_t, uint8_t*, uint32_t, TMO);
 ER wrt_i2c(I2C_HandleTypeDef*, uint8_t, uint8_t*, uint32_t, TMO);
 
+void i2c_isr(I2C_HandleTypeDef* sci);
 void i2c_rxi_isr(I2C_HandleTypeDef* sci);
 void i2c_txi_isr(I2C_HandleTypeDef* sci);
 void i2c_tei_isr(I2C_HandleTypeDef* sci);

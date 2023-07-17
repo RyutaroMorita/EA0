@@ -49,7 +49,8 @@
 #include "kernel_cfg.h"
 #include "driverlib.h"
 #include "main.h"
-#include "t_usci.h"
+#include "t_i2c.h"
+#include "t_uart.h"
 
 
 #ifdef __GNUC__
@@ -62,7 +63,8 @@
 
 extern void target_fput_log(char c);
 
-USCI_HandleTypeDef usci_a1;
+I2C_HandleTypeDef i2c;
+UART_HandleTypeDef uart;
 
 /**
   * @brief  Retargets the C library printf function to the USART.
@@ -77,14 +79,19 @@ PUTCHAR_PROTOTYPE
     return ch;
 }
 
-void uusci_a1_isr(intptr_t exinf)
+void usci_a1_isr(intptr_t exinf)
 {
-    usci_isr(&usci_a1);
+    uart_isr(&uart);
+}
+
+void usci_b1_isr(intptr_t exinf)
+{
+    i2c_isr(&i2c);
 }
 
 static void main_init(void)
 {
-    // USCI_A1
+    // uart
     GPIO_setAsPeripheralModuleFunctionInputPin(
             GPIO_PORT_P4,
             GPIO_PIN4 + GPIO_PIN5
@@ -96,9 +103,13 @@ static void main_init(void)
             GPIO_PIN1 + GPIO_PIN2
     );
 
-    usci_a1.reg = (uint32_t)USCI_A1_BASE;
-    ini_sio(&usci_a1, "9600 B8 PN S1");
-    ctl_sio(&usci_a1, TUSCI_RXE | TUSCI_TXE | TUSCI_DTRON | TUSCI_RTSON);
+    uart.reg = (uint32_t)USCI_A1_BASE;
+    ini_sio(&uart, "9600 B8 PN S1");
+    ctl_sio(&uart, TUART_RXE | TUART_TXE | TUART_DTRON | TUART_RTSON);
+
+    dly_tsk(40);
+    i2c.reg = (uint32_t)USCI_B1_BASE;
+    ini_i2c(&i2c);
 }
 
 /*
@@ -118,13 +129,16 @@ void main_task(intptr_t exinf)
     sprintf((char*)buf, "sprintf() Test = %g\r\n", tmp);
     p = &buf[0];
     for (i = 0; i < strlen((const char*)buf); i++) {
-        put_sio(&usci_a1, *p, 10);
+        put_sio(&uart, *p, 10);
         p++;
     }
 
+    buf[0] = 0x38;
+    wrt_i2c(&i2c, 0x7c, &buf[0], 1, 1000);
+
     while (1) {
-        if (E_OK == get_sio(&usci_a1, &c, 1000)) {
-            put_sio(&usci_a1, c, 10);
+        if (E_OK == get_sio(&uart, &c, 1000)) {
+            put_sio(&uart, c, 10);
         }
     }
 }
