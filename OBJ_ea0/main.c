@@ -48,9 +48,11 @@
 #include <msp430.h>
 #include "kernel_cfg.h"
 #include "driverlib.h"
-#include "main.h"
 #include "t_i2c.h"
 #include "t_uart.h"
+#include "lcd.h"
+
+#include "main.h"
 
 
 #ifdef __GNUC__
@@ -110,12 +112,17 @@ static void main_init(void)
     dly_tsk(40);
     i2c.reg = (uint32_t)USCI_B1_BASE;
     ini_i2c(&i2c);
+
+    lcd_init();
 }
 
 /*
  *  printf()やsprintf()で「%f」や「%g」を使用する場合は
  *  リンカのオプションとして「-u _printf_float」を追記すること
  */
+#define CMD 0x00
+#define DAT 0x40
+
 void main_task(intptr_t exinf)
 {
     uint8_t buf[32];
@@ -133,8 +140,9 @@ void main_task(intptr_t exinf)
         p++;
     }
 
-    buf[0] = 0x38;
-    wrt_i2c(&i2c, 0x7c, &buf[0], 1, 1000);
+    // Display
+    lcd_draw_text(0, 0, (uint8_t*)"0123456789ABCDEF");
+    lcd_set_cursor(1, 0, false, true);
 
     while (1) {
         if (E_OK == get_sio(&uart, &c, 1000)) {
