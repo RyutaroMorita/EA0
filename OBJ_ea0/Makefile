@@ -167,7 +167,9 @@ else
   APPL_COBJS = $(APPLNAME).o 
 endif
 APPL_COBJS := $(APPL_COBJS) log_output.o vasyslog.o t_perror.o strerror.o syscalls.o \
+	adc12_a.o \
 	lcd.o \
+	t_adc.o \
 	t_i2c.o \
 	t_uart.o \
 	usci_b_i2c.o

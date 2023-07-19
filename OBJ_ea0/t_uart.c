@@ -435,7 +435,10 @@ void ext_sio(UART_HandleTypeDef* uart)
 {
 	if (!(uart->uartb.flag & TSF_INIT))	/* 未初期化なら何もしない */
 		return;
+
 	dis_int_sio(uart);					/* シリアル割込み禁止 */
+
+	USCI_A_UART_disable(uart->reg);
 
 	uart->uartb.flag &= ~TSF_INIT;		/* 初期化済みフラグクリア */
 }

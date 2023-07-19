@@ -48,6 +48,7 @@
 #include <msp430.h>
 #include "kernel_cfg.h"
 #include "driverlib.h"
+#include "t_adc.h"
 #include "t_i2c.h"
 #include "t_uart.h"
 #include "lcd.h"
@@ -65,6 +66,7 @@
 
 extern void target_fput_log(char c);
 
+ADC_HandleTypeDef adc;
 I2C_HandleTypeDef i2c;
 UART_HandleTypeDef uart;
 
@@ -91,6 +93,11 @@ void usci_b1_isr(intptr_t exinf)
     i2c_isr(&i2c);
 }
 
+void adc12_isr(intptr_t exinf)
+{
+    adc_isr(&adc);
+}
+
 static void main_init(void)
 {
     // uart
@@ -105,6 +112,12 @@ static void main_init(void)
             GPIO_PIN1 + GPIO_PIN2
     );
 
+    // ADC
+    GPIO_setAsPeripheralModuleFunctionInputPin(
+            GPIO_PORT_P6,
+            GPIO_PIN0
+    );
+
     uart.reg = (uint32_t)USCI_A1_BASE;
     ini_sio(&uart, "9600 B8 PN S1");
     ctl_sio(&uart, TUART_RXE | TUART_TXE | TUART_DTRON | TUART_RTSON);
@@ -113,16 +126,16 @@ static void main_init(void)
     i2c.reg = (uint32_t)USCI_B1_BASE;
     ini_i2c(&i2c);
 
-    lcd_init();
+    adc.reg = (uint32_t)ADC12_A_BASE;
+    ini_adc(&adc);
+
+    //lcd_init();
 }
 
 /*
  *  printf()やsprintf()で「%f」や「%g」を使用する場合は
  *  リンカのオプションとして「-u _printf_float」を追記すること
  */
-#define CMD 0x00
-#define DAT 0x40
-
 void main_task(intptr_t exinf)
 {
     uint8_t buf[32];
@@ -130,6 +143,7 @@ void main_task(intptr_t exinf)
     uint8_t* p;
     int i;
     uint8_t c;
+    uint16_t val;
 
     main_init();
 
@@ -141,12 +155,26 @@ void main_task(intptr_t exinf)
     }
 
     // Display
-    lcd_draw_text(0, 0, (uint8_t*)"0123456789ABCDEF");
-    lcd_set_cursor(1, 0, false, true);
+    //lcd_draw_text(0, 0, (uint8_t*)"0123456789ABCDEF");
+    //lcd_set_cursor(1, 0, false, true);
+
+    //sta_adc(&adc);
+    //dly_tsk(10);
 
     while (1) {
+#if 0
         if (E_OK == get_sio(&uart, &c, 1000)) {
             put_sio(&uart, c, 10);
         }
+#endif
+//        sprintf((char*)buf, "val = %u\r\n", red_adc(&adc));
+        if (E_OK == get_adc(&adc, &val, 10))
+            sprintf((char*)buf, "val = %u\r\n", val);
+        p = &buf[0];
+        for (i = 0; i < strlen((const char*)buf); i++) {
+            put_sio(&uart, *p, 10);
+            p++;
+        }
+        dly_tsk(1000);
     }
 }

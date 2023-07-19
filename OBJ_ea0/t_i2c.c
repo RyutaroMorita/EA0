@@ -74,9 +74,9 @@ ER ini_i2c(I2C_HandleTypeDef* i2c)
     I2C_param.i2cClk = UCS_getSMCLK();
     I2C_param.dataRate = USCI_B_I2C_SET_DATA_RATE_100KBPS;
 
-    USCI_B_I2C_initMaster(USCI_B1_BASE, &I2C_param);
+    USCI_B_I2C_initMaster(i2c->reg, &I2C_param);
 
-    USCI_B_I2C_enable(USCI_B1_BASE);
+    USCI_B_I2C_enable(i2c->reg);
 
     memset(&i2c->i2cb, 0, sizeof(T_I2CB));
 
@@ -89,6 +89,8 @@ ER ini_i2c(I2C_HandleTypeDef* i2c)
 void ext_i2c(I2C_HandleTypeDef* i2c)
 {
     dis_int_i2c(i2c);
+
+    USCI_B_I2C_disable(i2c->reg);
 }
 
 
