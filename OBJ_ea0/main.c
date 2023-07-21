@@ -52,6 +52,7 @@
 #include "t_i2c.h"
 #include "t_uart.h"
 #include "lcd.h"
+#include "modbus.h"
 
 #include "main.h"
 
@@ -129,7 +130,29 @@ static void main_init(void)
     adc.reg = (uint32_t)ADC12_A_BASE;
     ini_adc(&adc);
 
-    //lcd_init();
+    lcd_init();
+}
+
+static uint16_t get_crc(uint8_t *z_p, uint32_t z_message_length)
+{
+    uint16_t crc= 0xffff;
+    uint16_t next;
+    uint16_t carry;
+    uint16_t n;
+
+    while (z_message_length--) {
+        next = (uint16_t)*z_p;
+        crc ^= next;
+        for (n = 0; n < 8; n++) {
+            carry = crc & 1;
+            crc >>= 1;
+            if (carry)
+                crc ^= 0xA001;
+        }
+        z_p++;
+    }
+
+    return crc;
 }
 
 /*
@@ -144,29 +167,149 @@ void main_task(intptr_t exinf)
     int i;
     uint8_t c;
     uint16_t val;
+    uint8_t sla = 0x01; // スレーブアドレス
+    uint8_t fnc;
+    uint16_t sta = 0;
+    uint16_t num = 1;
+    uint16_t crc;
+    int bytes;
+    uint16_t reg[4];
+    int len;
 
     main_init();
 
     sprintf((char*)buf, "sprintf() Test = %g\r\n", tmp);
+#if 0
     p = &buf[0];
     for (i = 0; i < strlen((const char*)buf); i++) {
         put_sio(&uart, *p, 10);
         p++;
     }
+#endif
 
     // Display
-    //lcd_draw_text(0, 0, (uint8_t*)"0123456789ABCDEF");
-    //lcd_set_cursor(1, 0, false, true);
+    lcd_draw_text(0, 0, (uint8_t*)"0123456789ABCDEF");
+    lcd_set_cursor(1, 0, false, true);
 
     //sta_adc(&adc);
     //dly_tsk(10);
 
     while (1) {
 #if 0
+        // Read Holding Register（03） - Query
+        fnc = 0x03;
+        buf[0] = sla;
+        buf[1] = fnc;
+        buf[2] = (uint8_t)(sta / 0x100U);
+        buf[3] = (uint8_t)(sta % 0x100U);
+        buf[4] = (uint8_t)(num / 0x100U);
+        buf[5] = (uint8_t)(num % 0x100U);
+        crc = get_crc(buf, 6);
+        buf[6] = (uint8_t)(crc % 0x100U); // CRCはリトルエンディアン
+        buf[7] = (uint8_t)(crc / 0x100U); // CRCはリトルエンディアン
+        len = 8;
+        p = &buf[0];
+        for (i = 0; i < len; i++) {
+            put_sio(&uart, *p, 10);
+            p++;
+        }
+        // Read Holding Register（03） - Response
+        len = 0;
+        p = &buf[0];
+        if (E_OK != get_sio(&uart, &c, 1000)) {
+            ctl_sio(&uart, TUART_RXCLR);
+            dly_tsk(100);
+            continue;
+        }
+        *p = c;
+        p++;
+        len++;
+        if (c != sla) {
+            ctl_sio(&uart, TUART_RXCLR);
+            dly_tsk(100);
+            continue;
+        }
+        if (E_OK != get_sio(&uart, &c, 1000)) {
+            ctl_sio(&uart, TUART_RXCLR);
+            dly_tsk(100);
+            continue;
+        }
+        *p = c;
+        p++;
+        len++;
+        if (c != fnc) {
+            ctl_sio(&uart, TUART_RXCLR);
+            dly_tsk(100);
+            continue;
+        }
+        if (E_OK != get_sio(&uart, &c, 1000)) {
+            ctl_sio(&uart, TUART_RXCLR);
+            dly_tsk(100);
+            continue;
+        }
+        bytes = (int)c;
+        *p = c;
+        p++;
+        len++;
+        for (i = 0; i < bytes; i++) {
+            if (E_OK != get_sio(&uart, &c, 1000)) {
+                ctl_sio(&uart, TUART_RXCLR);
+                dly_tsk(100);
+                break;
+            }
+            *p = c;
+            p++;
+            len++;
+        }
+        if (i != bytes) {
+            ctl_sio(&uart, TUART_RXCLR);
+            dly_tsk(100);
+            continue;
+        }
+        crc = 0;
+        if (E_OK != get_sio(&uart, &c, 1000)) {
+            ctl_sio(&uart, TUART_RXCLR);
+            dly_tsk(100);
+            continue;
+        }
+        crc += (uint16_t)c;             // CRCはリトルエンディアン
+        if (E_OK != get_sio(&uart, &c, 1000)) {
+            ctl_sio(&uart, TUART_RXCLR);
+            dly_tsk(100);
+            continue;
+        }
+        crc += (uint16_t)(c * 0x100U);  // CRCはリトルエンディアン
+        if (crc != get_crc(buf, len)) {
+            ctl_sio(&uart, TUART_RXCLR);
+            dly_tsk(100);
+            continue;
+        }
+        p = &buf[0];
+        p += 3;
+        for (i = 0; i < num; i++) {
+            reg[i] = 0;
+            reg[i] += (uint16_t)*p * 0x100U;
+            p++;
+            reg[i] += (uint16_t)*p;
+            p++;
+        }
+#endif
+
+        if (E_OK == modbus_read_register(HOLDING_REGISTER, 0x0001U, 0x0000U, 2, &reg[0], 1000)) {
+            sprintf((char*)buf, "%d", reg[0]);
+            lcd_draw_text(0, 0, buf);
+            sprintf((char*)buf, "%d", reg[1]);
+            lcd_draw_text(1, 0, buf);
+            //lcd_set_cursor(1, 0, false, true);
+        }
+
+        dly_tsk(100);
+#if 0
         if (E_OK == get_sio(&uart, &c, 1000)) {
             put_sio(&uart, c, 10);
         }
 #endif
+#if 0
 //        sprintf((char*)buf, "val = %u\r\n", red_adc(&adc));
         if (E_OK == get_adc(&adc, &val, 10))
             sprintf((char*)buf, "val = %u\r\n", val);
@@ -176,5 +319,6 @@ void main_task(intptr_t exinf)
             p++;
         }
         dly_tsk(1000);
+#endif
     }
 }

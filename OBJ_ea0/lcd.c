@@ -127,6 +127,7 @@ void lcd_draw_text(uint8_t row, uint8_t col, uint8_t* text)
     uint8_t buf[2];
     uint8_t *p;
     int cnt = 0;
+    bool_t eot = false;
 
     if (strlen((const char*)text) == 0)
         return;
@@ -154,8 +155,13 @@ void lcd_draw_text(uint8_t row, uint8_t col, uint8_t* text)
     p = text;
 
     do {
+        if (*p == 0)
+            eot = true;
         buf[0] = DAT;
-        buf[1] = *p++;
+        if (!eot)
+            buf[1] = *p++;
+        else
+            buf[1] = 0x20;  // SPACE
         wrt_i2c(&i2c, 0x7c, &buf[0], 2, 10);
         cnt++;
         //dly_tsk(10);

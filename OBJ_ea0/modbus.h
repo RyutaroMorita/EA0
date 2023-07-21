@@ -1,0 +1,26 @@
+/*
+ * modbus.h
+ *
+ *  Created on: 2023/07/21
+ *      Author: ryuta
+ */
+
+#ifndef MODBUS_H
+#define MODBUS_H
+
+typedef enum {
+    COIL_STATUS,
+    INPUT_STATUS,
+    HOLDING_REGISTER,
+    INPUT_REGISTER
+} MODBUS_FUNC;
+
+#define E_MODBUS_BSLA    (-100)
+#define E_MODBUS_BFNC    (-101)
+#define E_MODBUS_BCRC    (-102)
+
+
+ER modbus_read_register(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, uint16_t* pBuf, TMO tmout);
+
+
+#endif /* MODBUS_H */
