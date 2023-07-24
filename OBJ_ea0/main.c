@@ -119,6 +119,12 @@ static void main_init(void)
             GPIO_PIN0
     );
 
+    // BRD_REG
+    GPIO_setAsOutputPin(
+            GPIO_PORT_P7,
+            GPIO_PIN4
+    );
+
     uart.reg = (uint32_t)USCI_A1_BASE;
     ini_sio(&uart, "9600 B8 PN S1");
     ctl_sio(&uart, TUART_RXE | TUART_TXE | TUART_DTRON | TUART_RTSON);
@@ -174,9 +180,15 @@ void main_task(intptr_t exinf)
     uint16_t crc;
     int bytes;
     uint16_t reg[4];
+    uint8_t sts[4];
     int len;
+    ER ret;
 
     main_init();
+
+    //GPIO_setOutputHighOnPin(GPIO_PORT_P7, GPIO_PIN4);
+    //dly_tsk(1000);
+    //GPIO_setOutputLowOnPin(GPIO_PORT_P7, GPIO_PIN4);
 
     sprintf((char*)buf, "sprintf() Test = %g\r\n", tmp);
 #if 0
@@ -195,115 +207,67 @@ void main_task(intptr_t exinf)
     //dly_tsk(10);
 
     while (1) {
-#if 0
-        // Read Holding Register（03） - Query
-        fnc = 0x03;
-        buf[0] = sla;
-        buf[1] = fnc;
-        buf[2] = (uint8_t)(sta / 0x100U);
-        buf[3] = (uint8_t)(sta % 0x100U);
-        buf[4] = (uint8_t)(num / 0x100U);
-        buf[5] = (uint8_t)(num % 0x100U);
-        crc = get_crc(buf, 6);
-        buf[6] = (uint8_t)(crc % 0x100U); // CRCはリトルエンディアン
-        buf[7] = (uint8_t)(crc / 0x100U); // CRCはリトルエンディアン
-        len = 8;
-        p = &buf[0];
-        for (i = 0; i < len; i++) {
-            put_sio(&uart, *p, 10);
-            p++;
-        }
-        // Read Holding Register（03） - Response
-        len = 0;
-        p = &buf[0];
-        if (E_OK != get_sio(&uart, &c, 1000)) {
-            ctl_sio(&uart, TUART_RXCLR);
-            dly_tsk(100);
-            continue;
-        }
-        *p = c;
-        p++;
-        len++;
-        if (c != sla) {
-            ctl_sio(&uart, TUART_RXCLR);
-            dly_tsk(100);
-            continue;
-        }
-        if (E_OK != get_sio(&uart, &c, 1000)) {
-            ctl_sio(&uart, TUART_RXCLR);
-            dly_tsk(100);
-            continue;
-        }
-        *p = c;
-        p++;
-        len++;
-        if (c != fnc) {
-            ctl_sio(&uart, TUART_RXCLR);
-            dly_tsk(100);
-            continue;
-        }
-        if (E_OK != get_sio(&uart, &c, 1000)) {
-            ctl_sio(&uart, TUART_RXCLR);
-            dly_tsk(100);
-            continue;
-        }
-        bytes = (int)c;
-        *p = c;
-        p++;
-        len++;
-        for (i = 0; i < bytes; i++) {
-            if (E_OK != get_sio(&uart, &c, 1000)) {
-                ctl_sio(&uart, TUART_RXCLR);
-                dly_tsk(100);
-                break;
-            }
-            *p = c;
-            p++;
-            len++;
-        }
-        if (i != bytes) {
-            ctl_sio(&uart, TUART_RXCLR);
-            dly_tsk(100);
-            continue;
-        }
-        crc = 0;
-        if (E_OK != get_sio(&uart, &c, 1000)) {
-            ctl_sio(&uart, TUART_RXCLR);
-            dly_tsk(100);
-            continue;
-        }
-        crc += (uint16_t)c;             // CRCはリトルエンディアン
-        if (E_OK != get_sio(&uart, &c, 1000)) {
-            ctl_sio(&uart, TUART_RXCLR);
-            dly_tsk(100);
-            continue;
-        }
-        crc += (uint16_t)(c * 0x100U);  // CRCはリトルエンディアン
-        if (crc != get_crc(buf, len)) {
-            ctl_sio(&uart, TUART_RXCLR);
-            dly_tsk(100);
-            continue;
-        }
-        p = &buf[0];
-        p += 3;
-        for (i = 0; i < num; i++) {
-            reg[i] = 0;
-            reg[i] += (uint16_t)*p * 0x100U;
-            p++;
-            reg[i] += (uint16_t)*p;
-            p++;
-        }
-#endif
-
-        if (E_OK == modbus_read_register(HOLDING_REGISTER, 0x0001U, 0x0000U, 2, &reg[0], 1000)) {
+//#if 0
+        ret = modbus_read_register(HOLDING_REGISTER, 0x0001U, 0x0000U, 2, &reg[0], 1000);
+        if (E_OK == ret) {
             sprintf((char*)buf, "%d", reg[0]);
             lcd_draw_text(0, 0, buf);
             sprintf((char*)buf, "%d", reg[1]);
             lcd_draw_text(1, 0, buf);
-            //lcd_set_cursor(1, 0, false, true);
+        } else {
+            switch (ret) {
+            case E_MODBUS_BFNC:
+                sprintf((char*)buf, "Illegal Func.", reg[0]);
+                lcd_draw_text(0, 0, buf);
+                break;
+            case E_MODBUS_BADR:
+                sprintf((char*)buf, "Illegal DataAdr.", reg[0]);
+                lcd_draw_text(0, 0, buf);
+                break;
+            case E_MODBUS_BDAT:
+                sprintf((char*)buf, "Illegal DataVal.", reg[0]);
+                lcd_draw_text(0, 0, buf);
+                break;
+            }
         }
-
+//#endif
+#if 0
+        if (E_OK == modbus_read_status(COIL_STATUS, 0x0001U, 0x0000U, 10, &sts[0], 1000)) {
+            sprintf((char*)buf, "%d", ((sts[0] >> 0) & 0x0001));
+            lcd_draw_text(0, 0, buf);
+            sprintf((char*)buf, "%d", ((sts[1] >> 1) & 0x0001));
+            lcd_draw_text(1, 0, buf);
+        }
+#endif
+#if 0
+        reg[0] = 0x1234;
+        //reg[1] = 0x5678;
+        modbus_write_register(HOLDING_REGISTER, 0x0001U, 0x0000U, 1, &reg[0], 1000);
+#endif
+#if 0
+        sts[0] = 0xAA;
+        sts[1] = 0x02;
+        ret = modbus_write_status(COIL_STATUS, 0x0001U, 0x0000U, 11, &sts[0], 1000);
+        if (E_OK == ret) {
+            //
+        } else {
+            switch (ret) {
+            case E_MODBUS_BFNC:
+                sprintf((char*)buf, "Illegal Func.", reg[0]);
+                lcd_draw_text(0, 0, buf);
+                break;
+            case E_MODBUS_BADR:
+                sprintf((char*)buf, "Illegal DataAdr.", reg[0]);
+                lcd_draw_text(0, 0, buf);
+                break;
+            case E_MODBUS_BDAT:
+                sprintf((char*)buf, "Illegal DataVal.", reg[0]);
+                lcd_draw_text(0, 0, buf);
+                break;
+            }
+        }
         dly_tsk(100);
+#endif
 #if 0
         if (E_OK == get_sio(&uart, &c, 1000)) {
             put_sio(&uart, c, 10);

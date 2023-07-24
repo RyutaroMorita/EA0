@@ -17,10 +17,15 @@ typedef enum {
 
 #define E_MODBUS_BSLA    (-100)
 #define E_MODBUS_BFNC    (-101)
-#define E_MODBUS_BCRC    (-102)
+#define E_MODBUS_BADR    (-102)
+#define E_MODBUS_BDAT    (-103)
+#define E_MODBUS_BCRC    (-104)
 
 
+ER modbus_read_status(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, uint8_t* pBuf, TMO tmout);
 ER modbus_read_register(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, uint16_t* pBuf, TMO tmout);
+ER modbus_write_status(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, uint8_t* pBuf, TMO tmout);
+ER modbus_write_register(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, uint16_t* pBuf, TMO tmout);
 
 
 #endif /* MODBUS_H */
