@@ -22,6 +22,7 @@ typedef enum {
 #define E_MODBUS_BCRC    (-104)
 
 
+void modbus_set_mode(bool_t f485);
 ER modbus_read_status(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, uint8_t* pBuf, TMO tmout);
 ER modbus_read_register(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, uint16_t* pBuf, TMO tmout);
 ER modbus_write_status(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, uint8_t* pBuf, TMO tmout);

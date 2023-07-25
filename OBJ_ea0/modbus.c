@@ -6,14 +6,29 @@
  */
 
 #include <kernel.h>
+//#include <msp430.h>
+#include "driverlib.h"
 #include "t_uart.h"
 
 #include "modbus.h"
 
+#define MAX3485__RE_LOW     GPIO_setOutputLowOnPin(GPIO_PORT_P8, GPIO_PIN2)
+#define MAX3485__RE_HIGH    GPIO_setOutputHighOnPin(GPIO_PORT_P8, GPIO_PIN2)
+#define MAX3485_DE_LOW      GPIO_setOutputLowOnPin(GPIO_PORT_P3, GPIO_PIN7)
+#define MAX3485_DE_HIGH     GPIO_setOutputHighOnPin(GPIO_PORT_P3, GPIO_PIN7)
+
+
 extern UART_HandleTypeDef uart;
 
 uint8_t m_buf[32];
+bool_t m_f485 = false;
 
+
+void modbus_set_mode(bool_t f485)
+{
+    m_f485 = f485;
+    MAX3485__RE_LOW;
+}
 
 static uint16_t get_crc(uint8_t *z_p, uint32_t z_message_length)
 {
@@ -85,9 +100,29 @@ static ER modbus_read(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, void
     m_buf[7] = (uint8_t)(crc / 0x100U); // CRCはリトルエンディアン
     len = 8;
     p = &m_buf[0];
-    for (i = 0; i < len; i++) {
-        put_sio(&uart, *p, 10);
-        p++;
+    if (!m_f485) {
+        for (i = 0; i < len; i++) {
+            put_sio(&uart, *p, 10);
+            p++;
+        }
+    } else {
+        MAX3485_DE_HIGH;
+        for (i = 0; i < len; i++) {
+            put_sio(&uart, *p, 10);
+            ret = get_sio(&uart, &c, 10);
+            if (E_OK != ret) {
+                ctl_sio(&uart, TUART_RXCLR);
+                MAX3485_DE_LOW;
+                return ret;
+            }
+            if (*p != c) {
+                ctl_sio(&uart, TUART_RXCLR);
+                MAX3485_DE_LOW;
+                return E_SYS;
+            }
+            p++;
+        }
+        MAX3485_DE_LOW;
     }
 
     /*
@@ -316,9 +351,29 @@ static ER modbus_write(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, voi
         len = (7 + cnt);
     }
     p = &m_buf[0];
-    for (i = 0; i < len; i++) {
-        put_sio(&uart, *p, 10);
-        p++;
+    if (!m_f485) {
+        for (i = 0; i < len; i++) {
+            put_sio(&uart, *p, 10);
+            p++;
+        }
+    } else {
+        MAX3485_DE_HIGH;
+        for (i = 0; i < len; i++) {
+            put_sio(&uart, *p, 10);
+            ret = get_sio(&uart, &c, 10);
+            if (E_OK != ret) {
+                ctl_sio(&uart, TUART_RXCLR);
+                MAX3485_DE_LOW;
+                return ret;
+            }
+            if (*p != c) {
+                ctl_sio(&uart, TUART_RXCLR);
+                MAX3485_DE_LOW;
+                return E_SYS;
+            }
+            p++;
+        }
+        MAX3485_DE_LOW;
     }
 
     /*

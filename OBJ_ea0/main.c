@@ -119,10 +119,16 @@ static void main_init(void)
             GPIO_PIN0
     );
 
-    // BRD_REG
+    // _RE
     GPIO_setAsOutputPin(
-            GPIO_PORT_P7,
-            GPIO_PIN4
+            GPIO_PORT_P8,
+            GPIO_PIN2
+    );
+
+    // DE
+    GPIO_setAsOutputPin(
+            GPIO_PORT_P3,
+            GPIO_PIN7
     );
 
     uart.reg = (uint32_t)USCI_A1_BASE;
@@ -136,7 +142,7 @@ static void main_init(void)
     adc.reg = (uint32_t)ADC12_A_BASE;
     ini_adc(&adc);
 
-    lcd_init();
+    //lcd_init();
 }
 
 static uint16_t get_crc(uint8_t *z_p, uint32_t z_message_length)
@@ -186,28 +192,45 @@ void main_task(intptr_t exinf)
 
     main_init();
 
-    //GPIO_setOutputHighOnPin(GPIO_PORT_P7, GPIO_PIN4);
-    //dly_tsk(1000);
-    //GPIO_setOutputLowOnPin(GPIO_PORT_P7, GPIO_PIN4);
+    modbus_set_mode(true);
 
     sprintf((char*)buf, "sprintf() Test = %g\r\n", tmp);
-#if 0
+//#if 0
     p = &buf[0];
     for (i = 0; i < strlen((const char*)buf); i++) {
         put_sio(&uart, *p, 10);
         p++;
     }
+//#endif
+#if 0
+    c = 'T';
+    while (1) {
+        GPIO_setOutputHighOnPin(GPIO_PORT_P3, GPIO_PIN7);   // DE High
+        put_sio(&uart, c, 10);
+        if (E_OK == get_sio(&uart, &c, 1000)) {
+            if (c == 'T')
+                lcd_draw_text(0, 0, (uint8_t*)"OK!");
+            else
+                lcd_draw_text(0, 0, (uint8_t*)"NG!");
+        } else {
+            lcd_draw_text(0, 0, (uint8_t*)"NG!");
+        }
+        GPIO_setOutputLowOnPin(GPIO_PORT_P3, GPIO_PIN7);    // DE Low
+        dly_tsk(500);
+        lcd_clear();
+        dly_tsk(500);
+    }
 #endif
 
     // Display
-    lcd_draw_text(0, 0, (uint8_t*)"0123456789ABCDEF");
-    lcd_set_cursor(1, 0, false, true);
+    //lcd_draw_text(0, 0, (uint8_t*)"0123456789ABCDEF");
+    //lcd_set_cursor(1, 0, false, true);
 
     //sta_adc(&adc);
     //dly_tsk(10);
 
     while (1) {
-//#if 0
+#if 0
         ret = modbus_read_register(HOLDING_REGISTER, 0x0001U, 0x0000U, 2, &reg[0], 1000);
         if (E_OK == ret) {
             sprintf((char*)buf, "%d", reg[0]);
@@ -217,20 +240,20 @@ void main_task(intptr_t exinf)
         } else {
             switch (ret) {
             case E_MODBUS_BFNC:
-                sprintf((char*)buf, "Illegal Func.", reg[0]);
+                sprintf((char*)buf, "Illegal Func.");
                 lcd_draw_text(0, 0, buf);
                 break;
             case E_MODBUS_BADR:
-                sprintf((char*)buf, "Illegal DataAdr.", reg[0]);
+                sprintf((char*)buf, "Illegal DataAdr.");
                 lcd_draw_text(0, 0, buf);
                 break;
             case E_MODBUS_BDAT:
-                sprintf((char*)buf, "Illegal DataVal.", reg[0]);
+                sprintf((char*)buf, "Illegal DataVal.");
                 lcd_draw_text(0, 0, buf);
                 break;
             }
         }
-//#endif
+#endif
 #if 0
         if (E_OK == modbus_read_status(COIL_STATUS, 0x0001U, 0x0000U, 10, &sts[0], 1000)) {
             sprintf((char*)buf, "%d", ((sts[0] >> 0) & 0x0001));
@@ -253,26 +276,26 @@ void main_task(intptr_t exinf)
         } else {
             switch (ret) {
             case E_MODBUS_BFNC:
-                sprintf((char*)buf, "Illegal Func.", reg[0]);
+                sprintf((char*)buf, "Illegal Func.");
                 lcd_draw_text(0, 0, buf);
                 break;
             case E_MODBUS_BADR:
-                sprintf((char*)buf, "Illegal DataAdr.", reg[0]);
+                sprintf((char*)buf, "Illegal DataAdr.");
                 lcd_draw_text(0, 0, buf);
                 break;
             case E_MODBUS_BDAT:
-                sprintf((char*)buf, "Illegal DataVal.", reg[0]);
+                sprintf((char*)buf, "Illegal DataVal.");
                 lcd_draw_text(0, 0, buf);
                 break;
             }
         }
         dly_tsk(100);
 #endif
-#if 0
+//#if 0
         if (E_OK == get_sio(&uart, &c, 1000)) {
             put_sio(&uart, c, 10);
         }
-#endif
+//#endif
 #if 0
 //        sprintf((char*)buf, "val = %u\r\n", red_adc(&adc));
         if (E_OK == get_adc(&adc, &val, 10))
