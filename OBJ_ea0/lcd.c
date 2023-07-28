@@ -16,6 +16,7 @@
 
 extern I2C_HandleTypeDef i2c;
 
+static bool_t m_init = false;
 static bool_t m_visible = false;
 static bool_t m_blink = false;
 
@@ -23,6 +24,9 @@ static bool_t m_blink = false;
 void lcd_clear(void)
 {
     uint8_t buf[2];
+
+    if (!m_init)
+        return false;
 
     buf[0] = CMD;
     buf[1] = 0x01;  // Clear Display
@@ -82,6 +86,8 @@ void lcd_init(void)
     wrt_i2c(&i2c, 0x7c, &buf[0], 2, 10);
     dly_tsk(10);
 */
+    m_init = true;
+
     lcd_clear();
 }
 
@@ -90,6 +96,8 @@ bool_t lcd_set_cursor(uint8_t row, uint8_t col, bool_t visible, bool_t blink)
     uint8_t buf[2];
     uint8_t tmp = 0x0C;
 
+    if (!m_init)
+        return false;
     if (row > 1)
         return false;
     if (col > 16)
@@ -128,6 +136,9 @@ void lcd_draw_text(uint8_t row, uint8_t col, uint8_t* text)
     uint8_t *p;
     int cnt = 0;
     bool_t eot = false;
+
+    if (!m_init)
+        return false;
 
     if (strlen((const char*)text) == 0)
         return;
