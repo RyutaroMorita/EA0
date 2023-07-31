@@ -48,11 +48,13 @@
 #include <msp430.h>
 #include "kernel_cfg.h"
 #include "driverlib.h"
+#include "ea0.h"
 #include "t_adc.h"
 #include "t_i2c.h"
 #include "t_uart.h"
 #include "lcd.h"
 #include "modbus.h"
+#include "function.h"
 
 #include "main.h"
 
@@ -99,6 +101,27 @@ void adc12_isr(intptr_t exinf)
     adc_isr(&adc);
 }
 
+static bool_t debug = false;
+void port2_isr(intptr_t exinf)
+{
+    debug = !debug;
+    if (GPIO_getInterruptStatus(GPIO_PORT_P2, GPIO_PIN0)) {
+        GPIO_clearInterrupt(GPIO_PORT_P2, GPIO_PIN0);
+    }
+    if (GPIO_getInterruptStatus(GPIO_PORT_P2, GPIO_PIN2)) {
+        GPIO_clearInterrupt(GPIO_PORT_P2, GPIO_PIN2);
+    }
+    if (GPIO_getInterruptStatus(GPIO_PORT_P2, GPIO_PIN4)) {
+        GPIO_clearInterrupt(GPIO_PORT_P2, GPIO_PIN4);
+    }
+    if (GPIO_getInterruptStatus(GPIO_PORT_P2, GPIO_PIN5)) {
+        GPIO_clearInterrupt(GPIO_PORT_P2, GPIO_PIN5);
+    }
+    if (GPIO_getInterruptStatus(GPIO_PORT_P2, GPIO_PIN6)) {
+        GPIO_clearInterrupt(GPIO_PORT_P2, GPIO_PIN6);
+    }
+}
+
 static void main_init(void)
 {
     // uart
@@ -133,32 +156,43 @@ static void main_init(void)
 
     // Button = Red
     GPIO_setAsInputPin(
-            GPIO_PORT_P8,
-            GPIO_PIN1
+            GPIO_PORT_P2,
+            GPIO_PIN6
     );
 
     // Button = White
     GPIO_setAsInputPin(
             GPIO_PORT_P2,
-            GPIO_PIN3
+            GPIO_PIN2
     );
 
     // Button = Yellow
     GPIO_setAsInputPin(
             GPIO_PORT_P2,
-            GPIO_PIN6
+            GPIO_PIN4
     );
 
     // Button = Green
     GPIO_setAsInputPin(
             GPIO_PORT_P2,
-            GPIO_PIN2
+            GPIO_PIN0
     );
 
     // Button = Blue
     GPIO_setAsInputPin(
             GPIO_PORT_P2,
-            GPIO_PIN0
+            GPIO_PIN5
+    );
+
+    GPIO_selectInterruptEdge(
+            GPIO_PORT_P2,
+            GPIO_PIN0 + GPIO_PIN2 + GPIO_PIN4 + GPIO_PIN5 + GPIO_PIN6,
+            GPIO_HIGH_TO_LOW_TRANSITION
+    );
+
+    GPIO_enableInterrupt(
+            GPIO_PORT_P2,
+            GPIO_PIN0 + GPIO_PIN2 + GPIO_PIN4 + GPIO_PIN5 + GPIO_PIN6
     );
 
     uart.reg = (uint32_t)USCI_A1_BASE;
@@ -173,28 +207,7 @@ static void main_init(void)
     ini_adc(&adc);
 
     lcd_init();
-}
-
-static uint16_t get_crc(uint8_t *z_p, uint32_t z_message_length)
-{
-    uint16_t crc= 0xffff;
-    uint16_t next;
-    uint16_t carry;
-    uint16_t n;
-
-    while (z_message_length--) {
-        next = (uint16_t)*z_p;
-        crc ^= next;
-        for (n = 0; n < 8; n++) {
-            carry = crc & 1;
-            crc >>= 1;
-            if (carry)
-                crc ^= 0xA001;
-        }
-        z_p++;
-    }
-
-    return crc;
+    function_init();
 }
 
 /*
@@ -209,29 +222,26 @@ void main_task(intptr_t exinf)
     int i;
     uint8_t c;
     uint16_t val;
-    uint8_t sla = 0x01; // スレーブアドレス
-    uint8_t fnc;
-    uint16_t sta = 0;
-    uint16_t num = 1;
-    uint16_t crc;
     int bytes;
     uint16_t reg[4];
     uint8_t sts[4];
     int len;
     ER ret;
+    FLGPTN p_flgptn;
+    FLGPTN sw = 0xFFFF;
 
     main_init();
 
     //modbus_set_mode(true);
 
     sprintf((char*)buf, "sprintf() Test = %g\r\n", tmp);
-#if 0
+//#if 0
     p = &buf[0];
     for (i = 0; i < strlen((const char*)buf); i++) {
         put_sio(&uart, *p, 10);
         p++;
     }
-#endif
+//#endif
 #if 0
     c = 'T';
     while (1) {
@@ -259,9 +269,52 @@ void main_task(intptr_t exinf)
     //sta_adc(&adc);
     //dly_tsk(10);
 
+    //__bis_SR_register(LPM4_bits + GIE);
+
     while (1) {
+        if (E_TMOUT != twai_flg(FLG_INP, sw, TWF_ORW, &p_flgptn, 100)) {
+            if (p_flgptn & EVENT_ESC_OFF) {
+                strcpy((char*)buf, "RED : High\r\n");
+            } else
+            if (p_flgptn & EVENT_ESC_ON) {
+                strcpy((char*)buf, "RED : Low\r\n");
+            } else
+            if (p_flgptn & EVENT_SHF_OFF) {
+                strcpy((char*)buf, "WHITE : High\r\n");
+            } else
+            if (p_flgptn & EVENT_SHF_ON) {
+                strcpy((char*)buf, "WHITE : Low\r\n");
+            } else
+            if (p_flgptn & EVENT_UP__OFF) {
+                strcpy((char*)buf, "YELLOW : High\r\n");
+            } else
+            if (p_flgptn & EVENT_UP__ON) {
+                strcpy((char*)buf, "YELLOW : Low\r\n");
+            } else
+            if (p_flgptn & EVENT_DWN_OFF) {
+                strcpy((char*)buf, "GREEN : High\r\n");
+            } else
+            if (p_flgptn & EVENT_DWN_ON) {
+                strcpy((char*)buf, "GREEN : Low\r\n");
+            } else
+            if (p_flgptn & EVENT_ENT_OFF) {
+                strcpy((char*)buf, "BLUE : High\r\n");
+            } else
+            if (p_flgptn & EVENT_ENT_ON) {
+                strcpy((char*)buf, "BLUE : Low\r\n");
+            } else
+            if (p_flgptn & EVENT_MNU) {
+                strcpy((char*)buf, "GOTO MENU\r\n");
+            }
+            p = &buf[0];
+            for (i = 0; i < strlen((const char*)buf); i++) {
+                put_sio(&uart, *p, 10);
+                p++;
+            }
+        }
+
 #if 0
-        if (GPIO_getInputPinValue(GPIO_PORT_P8, GPIO_PIN1) == GPIO_INPUT_PIN_HIGH)
+        if (GPIO_getInputPinValue(GPIO_PORT_P2, GPIO_PIN6) == GPIO_INPUT_PIN_HIGH)
             sprintf((char*)buf, "RED : High\r\n");
         else
             sprintf((char*)buf, "RED : Low\r\n");
@@ -270,7 +323,7 @@ void main_task(intptr_t exinf)
             put_sio(&uart, *p, 10);
             p++;
         }
-        if (GPIO_getInputPinValue(GPIO_PORT_P2, GPIO_PIN3) == GPIO_INPUT_PIN_HIGH)
+        if (GPIO_getInputPinValue(GPIO_PORT_P2, GPIO_PIN2) == GPIO_INPUT_PIN_HIGH)
             sprintf((char*)buf, "WHITE : High\r\n");
         else
             sprintf((char*)buf, "WHITE : Low\r\n");
@@ -279,7 +332,7 @@ void main_task(intptr_t exinf)
             put_sio(&uart, *p, 10);
             p++;
         }
-        if (GPIO_getInputPinValue(GPIO_PORT_P2, GPIO_PIN6) == GPIO_INPUT_PIN_HIGH)
+        if (GPIO_getInputPinValue(GPIO_PORT_P2, GPIO_PIN4) == GPIO_INPUT_PIN_HIGH)
             sprintf((char*)buf, "YELLOW : High\r\n");
         else
             sprintf((char*)buf, "YELLOW : Low\r\n");
@@ -288,7 +341,7 @@ void main_task(intptr_t exinf)
             put_sio(&uart, *p, 10);
             p++;
         }
-        if (GPIO_getInputPinValue(GPIO_PORT_P2, GPIO_PIN2) == GPIO_INPUT_PIN_HIGH)
+        if (GPIO_getInputPinValue(GPIO_PORT_P2, GPIO_PIN0) == GPIO_INPUT_PIN_HIGH)
             sprintf((char*)buf, "GREEN : High\r\n");
         else
             sprintf((char*)buf, "GREEN : Low\r\n");
@@ -297,7 +350,7 @@ void main_task(intptr_t exinf)
             put_sio(&uart, *p, 10);
             p++;
         }
-        if (GPIO_getInputPinValue(GPIO_PORT_P2, GPIO_PIN0) == GPIO_INPUT_PIN_HIGH)
+        if (GPIO_getInputPinValue(GPIO_PORT_P2, GPIO_PIN5) == GPIO_INPUT_PIN_HIGH)
             sprintf((char*)buf, "BLUE : High\r\n");
         else
             sprintf((char*)buf, "BLUE : Low\r\n");
@@ -308,7 +361,7 @@ void main_task(intptr_t exinf)
         }
         dly_tsk(100);
 #endif
-//#if 0
+#if 0
         ret = modbus_read_register(HOLDING_REGISTER, 0x0001U, 0x0000U, 2, &reg[0], 1000);
         if (E_OK == ret) {
             sprintf((char*)buf, "%d", reg[0]);
@@ -331,7 +384,7 @@ void main_task(intptr_t exinf)
                 break;
             }
         }
-//#endif
+#endif
 #if 0
         if (E_OK == modbus_read_status(COIL_STATUS, 0x0001U, 0x0000U, 10, &sts[0], 1000)) {
             sprintf((char*)buf, "%d", ((sts[0] >> 0) & 0x0001));

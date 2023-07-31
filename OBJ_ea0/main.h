@@ -91,6 +91,11 @@
 #define INTATR_ADC12    (TA_ENAINT)         /* 割込み属性    */
 #define INTPRI_ADC12    (-1)                /* 割込み優先度   */
 
+#define INHNO_PORT2     (PORT2_VECTOR - 1)
+#define INTNO_PORT2     (PORT2_VECTOR - 1)
+#define INTATR_PORT2    (TA_ENAINT)         /* 割込み属性    */
+#define INTPRI_PORT2    (-1)                /* 割込み優先度   */
+
 /*
  *  関数のプロトタイプ宣言
  */
