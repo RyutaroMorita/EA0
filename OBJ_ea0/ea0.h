@@ -10,7 +10,40 @@
 
 
 /*
- * イベントフラグ
+ *  レジスタテーブル
+ */
+typedef struct {
+    uint16_t address;
+    uint16_t data[4];
+} REG_RECORD;
+
+/*
+ *  表示モード
+ */
+typedef enum {
+    Signed,
+    Unsigned,
+    Hex,
+    Binary,
+    Long,
+    Long_Inverse,
+    Float,
+    Float_Inverse,
+    Double,
+    Double_Inverse,
+} DSP_MODE;
+
+/*
+ *  操作モード
+ */
+typedef enum {
+    Address,
+    Value,
+    View,
+} OPT_MODE;
+
+/*
+ *  イベントフラグ
  */
 #define EVENT_ESC_OFF       0x0001UL
 #define EVENT_ESC_ON        0x0002UL

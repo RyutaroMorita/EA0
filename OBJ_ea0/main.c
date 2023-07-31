@@ -69,6 +69,68 @@
 
 extern void target_fput_log(char c);
 
+const uint8_t drum_polarity[] = {
+    (uint8_t)'+',
+    (uint8_t)'-',
+};
+
+const uint8_t drum_decimal[] = {
+    (uint8_t)'0',
+    (uint8_t)'1',
+    (uint8_t)'2',
+    (uint8_t)'3',
+    (uint8_t)'4',
+    (uint8_t)'5',
+    (uint8_t)'6',
+    (uint8_t)'7',
+    (uint8_t)'8',
+    (uint8_t)'9',
+};
+
+const uint8_t drum_hex[] = {
+    (uint8_t)'0',
+    (uint8_t)'1',
+    (uint8_t)'2',
+    (uint8_t)'3',
+    (uint8_t)'4',
+    (uint8_t)'5',
+    (uint8_t)'6',
+    (uint8_t)'7',
+    (uint8_t)'8',
+    (uint8_t)'9',
+    (uint8_t)'A',
+    (uint8_t)'B',
+    (uint8_t)'C',
+    (uint8_t)'D',
+    (uint8_t)'E',
+    (uint8_t)'F',
+};
+
+const uint8_t drum_binary[] = {
+    (uint8_t)'0',
+    (uint8_t)'1',
+};
+
+const uint8_t drum_float[] = {
+    (uint8_t)'0',
+    (uint8_t)'1',
+    (uint8_t)'2',
+    (uint8_t)'3',
+    (uint8_t)'4',
+    (uint8_t)'5',
+    (uint8_t)'6',
+    (uint8_t)'7',
+    (uint8_t)'8',
+    (uint8_t)'9',
+    (uint8_t)'.',
+};
+
+REG_RECORD  g_table[80];
+DSP_MODE g_dsp = Signed;
+OPT_MODE g_opt = Address;
+int g_current = 0;
+int g_records = 0;
+
 ADC_HandleTypeDef adc;
 I2C_HandleTypeDef i2c;
 UART_HandleTypeDef uart;
@@ -210,10 +272,198 @@ static void main_init(void)
     function_init();
 }
 
+static uint8_t get_next_drum(DSP_MODE mode, uint8_t digit, uint8_t current)
+{
+    int i;
+    int siz;
+    const uint8_t* p;
+
+    switch (mode) {
+    case Signed:
+    case Long:
+    case Long_Inverse:
+        if (digit == 0) {
+            siz = sizeof(drum_polarity);
+            p = &drum_polarity[0];
+        } else {
+            siz = sizeof(drum_decimal);
+            p = &drum_decimal[0];
+        }
+        break;
+    case Unsigned:
+        siz = sizeof(drum_decimal);
+        p = &drum_decimal[0];
+        break;
+    case Hex:
+        siz = sizeof(drum_hex);
+        p = &drum_hex[0];
+        break;
+    case Binary:
+        siz = sizeof(drum_binary);
+        p = &drum_binary[0];
+        break;
+    //case Float:
+    //case Float_Inverse:
+    //case Double:
+    //case Double_Inverse:
+    default:
+        if (digit == 0) {
+            siz = sizeof(drum_polarity);
+            p = &drum_polarity[0];
+        } else {
+            siz = sizeof(drum_float);
+            p = &drum_float[0];
+        }
+        break;
+    }
+
+    for (i = 0; i < siz; i++) {
+        if (current == p[i]) {
+            i++;
+            if (i == siz)
+                i = 0;
+            return p[i];
+        }
+    }
+
+    return (uint8_t)'0';
+}
+
+static uint8_t get_back_drum(DSP_MODE mode, uint8_t digit, uint8_t current)
+{
+    int i;
+    int siz;
+    const uint8_t* p;
+
+    switch (mode) {
+    case Signed:
+    case Long:
+    case Long_Inverse:
+        if (digit == 0) {
+            siz = sizeof(drum_polarity);
+            p = &drum_polarity[0];
+        } else {
+            siz = sizeof(drum_decimal);
+            p = &drum_decimal[0];
+        }
+        break;
+    case Unsigned:
+        siz = sizeof(drum_decimal);
+        p = &drum_decimal[0];
+        break;
+    case Hex:
+        siz = sizeof(drum_hex);
+        p = &drum_hex[0];
+        break;
+    case Binary:
+        siz = sizeof(drum_binary);
+        p = &drum_binary[0];
+        break;
+    //case Float:
+    //case Float_Inverse:
+    //case Double:
+    //case Double_Inverse:
+    default:
+        if (digit == 0) {
+            siz = sizeof(drum_polarity);
+            p = &drum_polarity[0];
+        } else {
+            siz = sizeof(drum_float);
+            p = &drum_float[0];
+        }
+        break;
+    }
+
+    for (i = 0; i < siz; i++) {
+        if (current == p[i]) {
+            i--;
+            if (i < 0)
+                i = (siz - 1);
+            return p[i];
+        }
+    }
+
+    return (uint8_t)'0';
+}
+
 /*
  *  printf()やsprintf()で「%f」や「%g」を使用する場合は
  *  リンカのオプションとして「-u _printf_float」を追記すること
  */
+void main_task(intptr_t exinf)
+{
+    int i;
+    uint8_t adr[8];
+    uint8_t idx[8];
+    uint8_t buf[32];
+    uint8_t row = 0;
+    uint8_t col = 2;
+    FLGPTN p_flgptn;
+    FLGPTN sw = 0xFFFF;
+    uint8_t drm;
+    uint8_t dgt = 0;
+
+    main_init();
+
+    for (i = 0; i < 80; i++)
+        g_table[i].address = 1;
+
+    sprintf((char*)adr, "%05d", g_table[g_current].address);
+    sprintf((char*)idx, "[%02d/%02d]", g_current, g_records);
+    sprintf((char*)buf, "R:%s  %s", adr, idx);
+    lcd_draw_text(0, 0, (uint8_t*)buf);
+    lcd_set_cursor(row, col, false, true);
+
+    while (1) {
+        if (E_TMOUT != twai_flg(FLG_INP, sw, TWF_ORW, &p_flgptn, 100)) {
+            if (p_flgptn & EVENT_ESC_OFF) {
+                //strcpy((char*)buf, "RED : High\r\n");
+            } else
+            if (p_flgptn & EVENT_ESC_ON) {
+                //strcpy((char*)buf, "RED : Low\r\n");
+            } else
+            if (p_flgptn & EVENT_SHF_OFF) {
+                //strcpy((char*)buf, "WHITE : High\r\n");
+            } else
+            if (p_flgptn & EVENT_SHF_ON) {
+                dgt++;
+                if (dgt == 5)
+                    dgt = 0;
+                lcd_set_cursor(row, (2 + dgt), false, true);
+            } else
+            if (p_flgptn & EVENT_UP__OFF) {
+                //strcpy((char*)buf, "YELLOW : High\r\n");
+            } else
+            if (p_flgptn & EVENT_UP__ON) {
+                adr[dgt] = get_next_drum(Unsigned, dgt, adr[dgt]);
+                sprintf((char*)idx, "[%02d/%02d]", g_current, g_records);
+                sprintf((char*)buf, "R:%s  %s", adr, idx);
+                lcd_draw_text(0, 0, (uint8_t*)buf);
+                lcd_set_cursor(row, (2 + dgt), false, true);
+            } else
+            if (p_flgptn & EVENT_DWN_OFF) {
+                //strcpy((char*)buf, "GREEN : High\r\n");
+            } else
+            if (p_flgptn & EVENT_DWN_ON) {
+                adr[dgt] = get_back_drum(Unsigned, dgt, adr[dgt]);
+                sprintf((char*)idx, "[%02d/%02d]", g_current, g_records);
+                sprintf((char*)buf, "R:%s  %s", adr, idx);
+                lcd_draw_text(0, 0, (uint8_t*)buf);
+                lcd_set_cursor(row, (2 + dgt), false, true);
+            } else
+            if (p_flgptn & EVENT_ENT_OFF) {
+                //strcpy((char*)buf, "BLUE : High\r\n");
+            } else
+            if (p_flgptn & EVENT_ENT_ON) {
+                //strcpy((char*)buf, "BLUE : Low\r\n");
+            } else
+            if (p_flgptn & EVENT_MNU) {
+                //strcpy((char*)buf, "GOTO MENU\r\n");
+            }
+        }
+    }
+}
+#if 0
 void main_task(intptr_t exinf)
 {
     uint8_t buf[32];
@@ -440,3 +690,4 @@ void main_task(intptr_t exinf)
 #endif
     }
 }
+#endif
