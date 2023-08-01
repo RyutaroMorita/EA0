@@ -13,6 +13,7 @@
  *  レジスタテーブル
  */
 typedef struct {
+    bool_t registered;
     uint16_t address;
     uint16_t data[4];
 } REG_RECORD;

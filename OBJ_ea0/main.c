@@ -125,7 +125,9 @@ const uint8_t drum_float[] = {
     (uint8_t)'.',
 };
 
-REG_RECORD  g_table[80];
+#define MAX_RECORD  80
+
+REG_RECORD  g_table[MAX_RECORD];
 DSP_MODE g_dsp = Signed;
 OPT_MODE g_opt = Address;
 int g_current = 0;
@@ -134,6 +136,9 @@ int g_records = 0;
 ADC_HandleTypeDef adc;
 I2C_HandleTypeDef i2c;
 UART_HandleTypeDef uart;
+
+static uint8_t m_buf[32];
+static uint8_t m_row = 0;
 
 /**
   * @brief  Retargets the C library printf function to the USART.
@@ -251,12 +256,12 @@ static void main_init(void)
             GPIO_PIN0 + GPIO_PIN2 + GPIO_PIN4 + GPIO_PIN5 + GPIO_PIN6,
             GPIO_HIGH_TO_LOW_TRANSITION
     );
-
+/*
     GPIO_enableInterrupt(
             GPIO_PORT_P2,
             GPIO_PIN0 + GPIO_PIN2 + GPIO_PIN4 + GPIO_PIN5 + GPIO_PIN6
     );
-
+*/
     uart.reg = (uint32_t)USCI_A1_BASE;
     ini_sio(&uart, "9600 B8 PN S1");
     ctl_sio(&uart, TUART_RXE | TUART_TXE | TUART_DTRON | TUART_RTSON);
@@ -272,7 +277,7 @@ static void main_init(void)
     function_init();
 }
 
-static uint8_t get_next_drum(DSP_MODE mode, uint8_t digit, uint8_t current)
+static uint8_t get_next_drum(DSP_MODE mode, uint8_t* value, uint8_t digit, uint8_t current)
 {
     int i;
     int siz;
@@ -311,11 +316,19 @@ static uint8_t get_next_drum(DSP_MODE mode, uint8_t digit, uint8_t current)
             siz = sizeof(drum_polarity);
             p = &drum_polarity[0];
         } else {
-            siz = sizeof(drum_float);
-            p = &drum_float[0];
+            if (strchr((const char*)value, (int)'.') == NULL) {
+                siz = sizeof(drum_float);
+                p = &drum_float[0];
+            } else {
+                siz = sizeof(drum_decimal);
+                p = &drum_decimal[0];
+            }
         }
         break;
     }
+
+    if (current == (uint8_t)'.')
+        return (uint8_t)'0';
 
     for (i = 0; i < siz; i++) {
         if (current == p[i]) {
@@ -329,7 +342,7 @@ static uint8_t get_next_drum(DSP_MODE mode, uint8_t digit, uint8_t current)
     return (uint8_t)'0';
 }
 
-static uint8_t get_back_drum(DSP_MODE mode, uint8_t digit, uint8_t current)
+static uint8_t get_back_drum(DSP_MODE mode, uint8_t* value, uint8_t digit, uint8_t current)
 {
     int i;
     int siz;
@@ -368,11 +381,19 @@ static uint8_t get_back_drum(DSP_MODE mode, uint8_t digit, uint8_t current)
             siz = sizeof(drum_polarity);
             p = &drum_polarity[0];
         } else {
-            siz = sizeof(drum_float);
-            p = &drum_float[0];
+            if (strchr((const char*)value, (int)'.') == NULL) {
+                siz = sizeof(drum_float);
+                p = &drum_float[0];
+            } else {
+                siz = sizeof(drum_decimal);
+                p = &drum_decimal[0];
+            }
         }
         break;
     }
+
+    if (current == (uint8_t)'.')
+        return (uint8_t)'9';
 
     for (i = 0; i < siz; i++) {
         if (current == p[i]) {
@@ -386,6 +407,67 @@ static uint8_t get_back_drum(DSP_MODE mode, uint8_t digit, uint8_t current)
     return (uint8_t)'0';
 }
 
+static int get_records(void)
+{
+    int i;
+    for (i = 0; i < MAX_RECORD; i++) {
+        if (!g_table[i].registered)
+            break;
+    }
+    return i;
+}
+
+static int get_digits(DSP_MODE mode)
+{
+    int dgt;
+    switch (mode) {
+    case Signed:
+        dgt = 6;
+        break;
+    case Unsigned:
+        dgt = 5;
+        break;
+    case Hex:
+        dgt = 4;
+        break;
+    case Binary:
+        dgt = 16;
+        break;
+    case Long:
+    case Long_Inverse:
+        dgt = 9;
+        break;
+    case Float:
+    case Float_Inverse:
+        dgt = 8;
+        break;
+    //case Double:
+    //case Double_Inverse:
+    default:
+        dgt = 16;
+        break;
+    }
+    return dgt;
+}
+
+static void draw(uint8_t* pAdr, uint8_t* pVal)
+{
+    //uint8_t adr[8];
+    uint8_t idx[8];
+
+    //sprintf((char*)adr, "%05u", g_table[g_current].address);
+    if (pAdr != NULL) {
+        sprintf((char*)idx, "[%02d/%02d]", g_current + 1, g_records);
+        sprintf((char*)m_buf, "R:%s  %s", pAdr, idx);
+        lcd_draw_text(0, 0, (uint8_t*)m_buf);
+    }
+    if (pVal != NULL) {
+        strcpy((char*)m_buf, (const char*)pVal);
+        lcd_draw_text(1, 0, (uint8_t*)m_buf);
+    }
+//    lcd_set_cursor(row, col, visible, blink);
+}
+
 /*
  *  printf()やsprintf()で「%f」や「%g」を使用する場合は
  *  リンカのオプションとして「-u _printf_float」を追記すること
@@ -394,75 +476,248 @@ void main_task(intptr_t exinf)
 {
     int i;
     uint8_t adr[8];
-    uint8_t idx[8];
-    uint8_t buf[32];
-    uint8_t row = 0;
-    uint8_t col = 2;
+    //uint8_t idx[8];
+    uint8_t dgt = 0;
     FLGPTN p_flgptn;
     FLGPTN sw = 0xFFFF;
-    uint8_t drm;
-    uint8_t dgt = 0;
+    uint8_t val[32];
 
     main_init();
 
-    for (i = 0; i < 80; i++)
+    for (i = 0; i < MAX_RECORD; i++)
         g_table[i].address = 1;
 
-    sprintf((char*)adr, "%05d", g_table[g_current].address);
-    sprintf((char*)idx, "[%02d/%02d]", g_current, g_records);
-    sprintf((char*)buf, "R:%s  %s", adr, idx);
-    lcd_draw_text(0, 0, (uint8_t*)buf);
-    lcd_set_cursor(row, col, false, true);
+    sprintf((char*)adr, "%05u", g_table[g_current].address);
+    draw(adr, NULL);
+    lcd_set_cursor(0, (2 + dgt), false, true);
+
+    act_tsk(TSK_POL);
 
     while (1) {
         if (E_TMOUT != twai_flg(FLG_INP, sw, TWF_ORW, &p_flgptn, 100)) {
+            //wai_sem(SEM_DRW);
             if (p_flgptn & EVENT_ESC_OFF) {
-                //strcpy((char*)buf, "RED : High\r\n");
+                //strcpy((char*)m_buf, "RED : High\r\n");
             } else
             if (p_flgptn & EVENT_ESC_ON) {
-                //strcpy((char*)buf, "RED : Low\r\n");
+                switch (g_opt) {
+                case Address:
+                    if (get_records() == 0)
+                        break;
+                    if (g_current == 0)
+                        g_current = get_records() - 1;
+                    else
+                        g_current--;
+                    g_opt = View;
+                    sprintf((char*)adr, "%05u", g_table[g_current].address);
+                    draw(adr, NULL);
+                    lcd_set_cursor(m_row, 0, true, false);
+                    sig_sem(SEM_POL);
+                    break;
+                case Value:
+                    g_opt = View;
+                    sprintf((char*)adr, "%05u", g_table[g_current].address);
+                    draw(adr, NULL);
+                    lcd_set_cursor(m_row, 0, true, false);
+                    sig_sem(SEM_POL);
+                    break;
+                }
             } else
             if (p_flgptn & EVENT_SHF_OFF) {
-                //strcpy((char*)buf, "WHITE : High\r\n");
+                //strcpy((char*)m_buf, "WHITE : High\r\n");
             } else
             if (p_flgptn & EVENT_SHF_ON) {
-                dgt++;
-                if (dgt == 5)
-                    dgt = 0;
-                lcd_set_cursor(row, (2 + dgt), false, true);
+                switch (g_opt) {
+                case Address:
+                    dgt++;
+                    if (dgt == 5)
+                        dgt = 0;
+                    lcd_set_cursor(0, (2 + dgt), false, true);
+                    break;
+                case Value:
+                    dgt++;
+                    if (dgt == get_digits(g_dsp))
+                        dgt = 0;
+                    lcd_set_cursor(1, dgt, false, true);
+                    break;
+                }
             } else
             if (p_flgptn & EVENT_UP__OFF) {
-                //strcpy((char*)buf, "YELLOW : High\r\n");
+                //strcpy((char*)m_buf, "YELLOW : High\r\n");
             } else
             if (p_flgptn & EVENT_UP__ON) {
-                adr[dgt] = get_next_drum(Unsigned, dgt, adr[dgt]);
-                sprintf((char*)idx, "[%02d/%02d]", g_current, g_records);
-                sprintf((char*)buf, "R:%s  %s", adr, idx);
-                lcd_draw_text(0, 0, (uint8_t*)buf);
-                lcd_set_cursor(row, (2 + dgt), false, true);
+                switch (g_opt) {
+                case Address:
+                    adr[dgt] = get_next_drum(Unsigned, adr, dgt, adr[dgt]);
+                    draw(adr, NULL);
+                    lcd_set_cursor(0, (2 + dgt), false, true);
+                    break;
+                case Value:
+                    val[dgt] = get_next_drum(g_dsp, val, dgt, val[dgt]);
+                    draw(NULL, val);
+                    lcd_set_cursor(1, dgt, false, true);
+                    break;
+                //case View:
+                default:
+                    if (m_row == 1) {
+                        wai_sem(SEM_DRW);
+                        m_row = 0;
+                        lcd_set_cursor(m_row, 0, false, true);
+                        sig_sem(SEM_DRW);
+                    } else {
+                        //rel_wai(TSK_POL);
+                        wai_sem(SEM_POL);
+                        if (g_current == 0)
+                            g_current = get_records() - 1;
+                        else
+                            g_current--;
+                        m_row = 0;
+                        sprintf((char*)adr, "%05u", g_table[g_current].address);
+                        draw(adr, NULL);
+                        lcd_set_cursor(m_row, 0, true, false);
+                        sig_sem(SEM_POL);
+                    }
+                    break;
+                }
             } else
             if (p_flgptn & EVENT_DWN_OFF) {
-                //strcpy((char*)buf, "GREEN : High\r\n");
+                //strcpy((char*)m_buf, "GREEN : High\r\n");
             } else
             if (p_flgptn & EVENT_DWN_ON) {
-                adr[dgt] = get_back_drum(Unsigned, dgt, adr[dgt]);
-                sprintf((char*)idx, "[%02d/%02d]", g_current, g_records);
-                sprintf((char*)buf, "R:%s  %s", adr, idx);
-                lcd_draw_text(0, 0, (uint8_t*)buf);
-                lcd_set_cursor(row, (2 + dgt), false, true);
+                switch (g_opt) {
+                case Address:
+                    adr[dgt] = get_back_drum(Unsigned, adr, dgt, adr[dgt]);
+                    draw(adr, NULL);
+                    lcd_set_cursor(0, (2 + dgt), false, true);
+                    break;
+                case Value:
+                    val[dgt] = get_back_drum(g_dsp, val, dgt, val[dgt]);
+                    draw(NULL, val);
+                    lcd_set_cursor(1, dgt, false, true);
+                    break;
+                //case View:
+                default:
+                    if (m_row == 0) {
+                        wai_sem(SEM_DRW);
+                        m_row = 1;
+                        lcd_set_cursor(m_row, 0, false, true);
+                        sig_sem(SEM_DRW);
+                    } else {
+                        //rel_wai(TSK_POL);
+                        wai_sem(SEM_POL);
+                        if (g_current == (MAX_RECORD - 1))
+                            g_current = 0;
+                        else
+                            g_current++;
+                        m_row = 0;
+                        if (!g_table[g_current].registered) {
+                            g_opt = Address;
+                            lcd_clear();
+                            dgt = 0;
+                            sprintf((char*)adr, "%05u", g_table[g_current].address);
+                            draw(adr, NULL);
+                            lcd_set_cursor(0, (2 + dgt), false, true);
+                        } else {
+                            sprintf((char*)adr, "%05u", g_table[g_current].address);
+                            draw(adr, NULL);
+                            lcd_set_cursor(m_row, 0, true, false);
+                            sig_sem(SEM_POL);
+                        }
+                    }
+                    break;
+                }
             } else
             if (p_flgptn & EVENT_ENT_OFF) {
-                //strcpy((char*)buf, "BLUE : High\r\n");
+                //strcpy((char*)m_buf, "BLUE : High\r\n");
             } else
             if (p_flgptn & EVENT_ENT_ON) {
-                //strcpy((char*)buf, "BLUE : Low\r\n");
+                switch (g_opt) {
+                case Address:
+                    g_table[g_current].address = strtoul((const char*)adr, NULL, 10);
+                    g_table[g_current].registered = true;
+                    g_records = get_records();
+                    g_opt = View;
+                    sprintf((char*)adr, "%05u", g_table[g_current].address);
+                    draw(adr, NULL);
+                    lcd_set_cursor(m_row, 0, true, false);
+                    sig_sem(SEM_POL);
+                    break;
+                case Value:
+                    //
+                    break;
+                //case View:
+                default:
+                    //rel_wai(TSK_POL);
+                    wai_sem(SEM_POL);
+                    if (m_row == 0) {
+                        g_opt = Address;
+                        lcd_clear();
+                        dgt = 0;
+                        sprintf((char*)adr, "%05u", g_table[g_current].address);
+                        draw(adr, NULL);
+                        lcd_set_cursor(0, (2 + dgt), false, true);
+                    } else {
+                        g_opt = Value;
+                        lcd_clear();
+                        dgt = 0;
+                        sprintf((char*)adr, "%05u", g_table[g_current].address);
+                        sprintf((char*)val, "%+06d", g_table[g_current].data[0]);
+                        draw(adr, val);
+                        lcd_set_cursor(1, dgt, false, true);
+                    }
+                    break;
+                }
             } else
             if (p_flgptn & EVENT_MNU) {
-                //strcpy((char*)buf, "GOTO MENU\r\n");
+                //strcpy((char*)m_buf, "GOTO MENU\r\n");
             }
+            //sig_sem(SEM_DRW);
         }
     }
 }
+
+void poll_task(intptr_t exinf)
+{
+    uint16_t top;
+    ER ret;
+    //uint16_t reg[4];
+
+    while (1) {
+        wai_sem(SEM_POL);
+        top = g_table[g_current].address / 10000;
+        switch (top) {
+        case 0:
+            break;
+        case 1:
+            break;
+        case 3:
+            break;
+        case 4:
+            ret = modbus_read_register(
+                    HOLDING_REGISTER,
+                    0x0001U,
+                    (g_table[g_current].address - 40001),
+                    1,
+                    &g_table[g_current].data[0],
+                    1000
+                    );
+            if (ret != E_OK)
+                break;
+            sprintf((char*)m_buf, "%d", g_table[g_current].data[0]);
+            wai_sem(SEM_DRW);
+            lcd_set_cursor(m_row, 0, false, false);
+            lcd_draw_text(1, 0, (uint8_t*)m_buf);
+            lcd_set_cursor(m_row, 0, true, false);
+            sig_sem(SEM_DRW);
+            break;
+        default:
+            break;
+        }
+        sig_sem(SEM_POL);
+        //dly_tsk(100);
+    }
+}
+
 #if 0
 void main_task(intptr_t exinf)
 {
