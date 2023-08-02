@@ -52,7 +52,7 @@ static uint16_t get_crc(uint8_t *z_p, uint32_t z_message_length)
     return crc;
 }
 
-static ER modbus_read(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, void* pBuf, TMO tmout)
+static __attribute__ ((section (".subtext"))) ER modbus_read(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, void* pBuf, TMO tmout)
 {
     uint16_t crc;
     int len;
@@ -60,6 +60,8 @@ static ER modbus_read(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, void
     int i;
     ER ret;
     uint8_t c;
+    SYSTIM tim;
+    SYSTIM limit;
     uint8_t err = 0;
     int bytes;
     uint8_t* pByte;
@@ -128,29 +130,14 @@ static ER modbus_read(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, void
     /*
      *  Read - Response
      */
-    len = 0;
-    p = &m_buf[0];
-    ret = get_sio(&uart, &c, tmout);
-    if (E_OK != ret) {
-        ctl_sio(&uart, TUART_RXCLR);
-        return ret;
-    }
-    *p = c;
-    p++;
-    len++;
-    if (c != sla) {
-        ctl_sio(&uart, TUART_RXCLR);
-        return E_MODBUS_BSLA;
-    }
-    ret = get_sio(&uart, &c, tmout);
-    if (E_OK != ret) {
-        ctl_sio(&uart, TUART_RXCLR);
-        return ret;
-    }
-    *p = c;
-    p++;
-    len++;
-    if (c == (fnc | 0x80)) {
+    get_tim(&tim);
+    limit = tim + (SYSTIM)tmout;
+    while (1) {
+        get_tim(&tim);
+        if (tim >= limit)
+            return E_TMOUT;
+        len = 0;
+        p = &m_buf[0];
         ret = get_sio(&uart, &c, tmout);
         if (E_OK != ret) {
             ctl_sio(&uart, TUART_RXCLR);
@@ -159,33 +146,58 @@ static ER modbus_read(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, void
         *p = c;
         p++;
         len++;
-        err = c;
-    } else {
-        if (c != fnc) {
+        if (c != sla) {
             ctl_sio(&uart, TUART_RXCLR);
-            return E_MODBUS_BFNC;
+            //return E_MODBUS_BSLA;
+            continue;
         }
         ret = get_sio(&uart, &c, tmout);
         if (E_OK != ret) {
             ctl_sio(&uart, TUART_RXCLR);
             return ret;
         }
-        bytes = (int)c;
         *p = c;
         p++;
         len++;
-        for (i = 0; i < bytes; i++) {
+        if (c == (fnc | 0x80)) {
             ret = get_sio(&uart, &c, tmout);
-            if (E_OK != ret)
-                break;
+            if (E_OK != ret) {
+                ctl_sio(&uart, TUART_RXCLR);
+                return ret;
+            }
             *p = c;
             p++;
             len++;
+            err = c;
+        } else {
+            if (c != fnc) {
+                ctl_sio(&uart, TUART_RXCLR);
+                //return E_MODBUS_BFNC;
+                continue;
+            }
+            ret = get_sio(&uart, &c, tmout);
+            if (E_OK != ret) {
+                ctl_sio(&uart, TUART_RXCLR);
+                return ret;
+            }
+            bytes = (int)c;
+            *p = c;
+            p++;
+            len++;
+            for (i = 0; i < bytes; i++) {
+                ret = get_sio(&uart, &c, tmout);
+                if (E_OK != ret)
+                    break;
+                *p = c;
+                p++;
+                len++;
+            }
+            if (i != bytes) {
+                ctl_sio(&uart, TUART_RXCLR);
+                return ret;
+            }
         }
-        if (i != bytes) {
-            ctl_sio(&uart, TUART_RXCLR);
-            return ret;
-        }
+        break;
     }
     crc = 0;
     ret = get_sio(&uart, &c, tmout);
@@ -206,6 +218,8 @@ static ER modbus_read(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, void
     }
 
     switch (err) {
+    case 0x00:
+        break;
     case 0x01:
         return E_MODBUS_BFNC;
         break;
@@ -214,6 +228,9 @@ static ER modbus_read(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, void
         break;
     case 0x03:
         return E_MODBUS_BDAT;
+        break;
+    default:
+        return E_MODBUS_BUNK;
         break;
     }
 
@@ -256,7 +273,7 @@ ER modbus_read_register(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, ui
     return modbus_read(fnc, sla, sta, num, (void*)pBuf, tmout);
 }
 
-static ER modbus_write(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, void* pBuf, TMO tmout)
+static __attribute__ ((section (".subtext"))) ER modbus_write(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, void* pBuf, TMO tmout)
 {
     bool_t mul = false;
     uint8_t* pByte;
@@ -269,6 +286,8 @@ static ER modbus_write(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, voi
     int i;
     ER ret;
     uint8_t c;
+    SYSTIM tim;
+    SYSTIM limit;
     uint8_t err = 0;
 
     if (num == 0)
@@ -379,29 +398,14 @@ static ER modbus_write(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, voi
     /*
      *  Write - Response
      */
-    len = 0;
-    p = &m_buf[0];
-    ret = get_sio(&uart, &c, tmout);
-    if (E_OK != ret) {
-        ctl_sio(&uart, TUART_RXCLR);
-        return ret;
-    }
-    *p = c;
-    p++;
-    len++;
-    if (c != sla) {
-        ctl_sio(&uart, TUART_RXCLR);
-        return E_MODBUS_BSLA;
-    }
-    ret = get_sio(&uart, &c, tmout);
-    if (E_OK != ret) {
-        ctl_sio(&uart, TUART_RXCLR);
-        return ret;
-    }
-    *p = c;
-    p++;
-    len++;
-    if (c == (fnc | 0x80)) {
+    get_tim(&tim);
+    limit = tim + (SYSTIM)tmout;
+    while (1) {
+        get_tim(&tim);
+        if (tim >= limit)
+            return E_TMOUT;
+        len = 0;
+        p = &m_buf[0];
         ret = get_sio(&uart, &c, tmout);
         if (E_OK != ret) {
             ctl_sio(&uart, TUART_RXCLR);
@@ -410,11 +414,10 @@ static ER modbus_write(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, voi
         *p = c;
         p++;
         len++;
-        err = c;
-    } else {
-        if (c != fnc) {
+        if (c != sla) {
             ctl_sio(&uart, TUART_RXCLR);
-            return E_MODBUS_BFNC;
+            //return E_MODBUS_BSLA;
+            continue;
         }
         ret = get_sio(&uart, &c, tmout);
         if (E_OK != ret) {
@@ -424,23 +427,7 @@ static ER modbus_write(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, voi
         *p = c;
         p++;
         len++;
-        if (c != (uint8_t)(sta / 0x100U)) {
-            ctl_sio(&uart, TUART_RXCLR);
-            return E_MODBUS_BADR;
-        }
-        ret = get_sio(&uart, &c, tmout);
-        if (E_OK != ret) {
-            ctl_sio(&uart, TUART_RXCLR);
-            return ret;
-        }
-        *p = c;
-        p++;
-        len++;
-        if (c != (uint8_t)(sta % 0x100U)) {
-            ctl_sio(&uart, TUART_RXCLR);
-            return E_MODBUS_BADR;
-        }
-        if (!mul) {
+        if (c == (fnc | 0x80)) {
             ret = get_sio(&uart, &c, tmout);
             if (E_OK != ret) {
                 ctl_sio(&uart, TUART_RXCLR);
@@ -449,34 +436,12 @@ static ER modbus_write(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, voi
             *p = c;
             p++;
             len++;
-            if (c != dat[0]) {
-                ctl_sio(&uart, TUART_RXCLR);
-                return E_MODBUS_BDAT;
-            }
-            ret = get_sio(&uart, &c, tmout);
-            if (E_OK != ret) {
-                ctl_sio(&uart, TUART_RXCLR);
-                return ret;
-            }
-            *p = c;
-            p++;
-            len++;
-            if (c != dat[1]) {
-                ctl_sio(&uart, TUART_RXCLR);
-                return E_MODBUS_BDAT;
-            }
+            err = c;
         } else {
-            ret = get_sio(&uart, &c, tmout);
-            if (E_OK != ret) {
+            if (c != fnc) {
                 ctl_sio(&uart, TUART_RXCLR);
-                return ret;
-            }
-            *p = c;
-            p++;
-            len++;
-            if (c != (uint8_t)(num / 0x100U)) {
-                ctl_sio(&uart, TUART_RXCLR);
-                return E_MODBUS_BDAT;
+                //return E_MODBUS_BFNC;
+                continue;
             }
             ret = get_sio(&uart, &c, tmout);
             if (E_OK != ret) {
@@ -486,11 +451,81 @@ static ER modbus_write(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, voi
             *p = c;
             p++;
             len++;
-            if (c != (uint8_t)(num % 0x100U)) {
+            if (c != (uint8_t)(sta / 0x100U)) {
                 ctl_sio(&uart, TUART_RXCLR);
-                return E_MODBUS_BDAT;
+                //return E_MODBUS_BADR;
+                continue;
+            }
+            ret = get_sio(&uart, &c, tmout);
+            if (E_OK != ret) {
+                ctl_sio(&uart, TUART_RXCLR);
+                return ret;
+            }
+            *p = c;
+            p++;
+            len++;
+            if (c != (uint8_t)(sta % 0x100U)) {
+                ctl_sio(&uart, TUART_RXCLR);
+                //return E_MODBUS_BADR;
+                continue;
+            }
+            if (!mul) {
+                ret = get_sio(&uart, &c, tmout);
+                if (E_OK != ret) {
+                    ctl_sio(&uart, TUART_RXCLR);
+                    return ret;
+                }
+                *p = c;
+                p++;
+                len++;
+                if (c != dat[0]) {
+                    ctl_sio(&uart, TUART_RXCLR);
+                    //return E_MODBUS_BDAT;
+                    continue;
+                }
+                ret = get_sio(&uart, &c, tmout);
+                if (E_OK != ret) {
+                    ctl_sio(&uart, TUART_RXCLR);
+                    return ret;
+                }
+                *p = c;
+                p++;
+                len++;
+                if (c != dat[1]) {
+                    ctl_sio(&uart, TUART_RXCLR);
+                    //return E_MODBUS_BDAT;
+                    continue;
+                }
+            } else {
+                ret = get_sio(&uart, &c, tmout);
+                if (E_OK != ret) {
+                    ctl_sio(&uart, TUART_RXCLR);
+                    return ret;
+                }
+                *p = c;
+                p++;
+                len++;
+                if (c != (uint8_t)(num / 0x100U)) {
+                    ctl_sio(&uart, TUART_RXCLR);
+                    //return E_MODBUS_BDAT;
+                    continue;
+                }
+                ret = get_sio(&uart, &c, tmout);
+                if (E_OK != ret) {
+                    ctl_sio(&uart, TUART_RXCLR);
+                    return ret;
+                }
+                *p = c;
+                p++;
+                len++;
+                if (c != (uint8_t)(num % 0x100U)) {
+                    ctl_sio(&uart, TUART_RXCLR);
+                    //return E_MODBUS_BDAT;
+                    continue;
+                }
             }
         }
+        break;
     }
     crc = 0;
     ret = get_sio(&uart, &c, tmout);
@@ -511,6 +546,8 @@ static ER modbus_write(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, voi
     }
 
     switch (err) {
+    case 0x00:
+        break;
     case 0x01:
         return E_MODBUS_BFNC;
         break;
@@ -519,6 +556,9 @@ static ER modbus_write(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, voi
         break;
     case 0x03:
         return E_MODBUS_BDAT;
+        break;
+    default:
+        return E_MODBUS_BUNK;
         break;
     }
 

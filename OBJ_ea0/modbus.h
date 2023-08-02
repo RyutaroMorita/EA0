@@ -15,11 +15,12 @@ typedef enum {
     INPUT_REGISTER
 } MODBUS_FUNC;
 
-#define E_MODBUS_BSLA    (-100)
+//#define E_MODBUS_BSLA    (-100)
 #define E_MODBUS_BFNC    (-101)
 #define E_MODBUS_BADR    (-102)
 #define E_MODBUS_BDAT    (-103)
 #define E_MODBUS_BCRC    (-104)
+#define E_MODBUS_BUNK    (-105)
 
 
 void modbus_set_mode(bool_t f485);

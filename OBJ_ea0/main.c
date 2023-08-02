@@ -132,6 +132,7 @@ DSP_MODE g_dsp = Signed;
 OPT_MODE g_opt = Address;
 int g_current = 0;
 int g_records = 0;
+ER g_err = E_OK;
 
 ADC_HandleTypeDef adc;
 I2C_HandleTypeDef i2c;
@@ -168,10 +169,10 @@ void adc12_isr(intptr_t exinf)
     adc_isr(&adc);
 }
 
-static bool_t debug = false;
+//static bool_t debug = false;
 void port2_isr(intptr_t exinf)
 {
-    debug = !debug;
+    //debug = !debug;
     if (GPIO_getInterruptStatus(GPIO_PORT_P2, GPIO_PIN0)) {
         GPIO_clearInterrupt(GPIO_PORT_P2, GPIO_PIN0);
     }
@@ -472,7 +473,7 @@ static void draw(uint8_t* pAdr, uint8_t* pVal)
  *  printf()やsprintf()で「%f」や「%g」を使用する場合は
  *  リンカのオプションとして「-u _printf_float」を追記すること
  */
-void main_task(intptr_t exinf)
+void __attribute__ ((section (".subtext"))) main_task(intptr_t exinf)
 {
     int i;
     uint8_t adr[8];
@@ -481,6 +482,9 @@ void main_task(intptr_t exinf)
     FLGPTN p_flgptn;
     FLGPTN sw = 0xFFFF;
     uint8_t val[32];
+    long ltmp;
+    uint16_t tmp;
+    int count = 0;
 
     main_init();
 
@@ -540,6 +544,51 @@ void main_task(intptr_t exinf)
                         dgt = 0;
                     lcd_set_cursor(1, dgt, false, true);
                     break;
+                //case View:
+                default:
+                    if (g_err == E_TMOUT)
+                        rel_wai(TSK_POL);
+                    wai_sem(SEM_POL);
+                    lcd_set_cursor(0, 0, false, false);
+                    g_dsp++;
+                    if (g_dsp > Double_Inverse)
+                        g_dsp = Signed;
+                    switch (g_dsp) {
+                    case Signed:
+                        lcd_draw_text(1, 0, (uint8_t*)"        > Signed");
+                        break;
+                    case Unsigned:
+                        lcd_draw_text(1, 0, (uint8_t*)"      > Unsigned");
+                        break;
+                    case Hex:
+                        lcd_draw_text(1, 0, (uint8_t*)"           > Hex");
+                        break;
+                    case Binary:
+                        lcd_draw_text(1, 0, (uint8_t*)"        > Binary");
+                        break;
+                    case Long:
+                        lcd_draw_text(1, 0, (uint8_t*)"          > Long");
+                        break;
+                    case Long_Inverse:
+                        lcd_draw_text(1, 0, (uint8_t*)"     > Long Inv.");
+                        break;
+                    case Float:
+                        lcd_draw_text(1, 0, (uint8_t*)"         > Float");
+                        break;
+                    case Float_Inverse:
+                        lcd_draw_text(1, 0, (uint8_t*)"    > Float Inv.");
+                        break;
+                    case Double:
+                        lcd_draw_text(1, 0, (uint8_t*)"        > Double");
+                        break;
+                    //case Double_Inverse:
+                    default:
+                        lcd_draw_text(1, 0, (uint8_t*)"   > Double Inv.");
+                        break;
+                    }
+                    dly_tsk(1000);
+                    sig_sem(SEM_POL);
+                    break;
                 }
             } else
             if (p_flgptn & EVENT_UP__OFF) {
@@ -562,11 +611,17 @@ void main_task(intptr_t exinf)
                     if (m_row == 1) {
                         wai_sem(SEM_DRW);
                         m_row = 0;
-                        lcd_set_cursor(m_row, 0, false, true);
+                        lcd_set_cursor(m_row, 0, true, false);
                         sig_sem(SEM_DRW);
                     } else {
-                        //rel_wai(TSK_POL);
+                        //wai_sem(SEM_DRW);
+                        //lcd_clear();
+                        //sig_sem(SEM_DRW);
+                        if (g_err == E_TMOUT)
+                            rel_wai(TSK_POL);
                         wai_sem(SEM_POL);
+                        lcd_clear();
+                        //count = 10;
                         if (g_current == 0)
                             g_current = get_records() - 1;
                         else
@@ -600,11 +655,17 @@ void main_task(intptr_t exinf)
                     if (m_row == 0) {
                         wai_sem(SEM_DRW);
                         m_row = 1;
-                        lcd_set_cursor(m_row, 0, false, true);
+                        lcd_set_cursor(m_row, 0, true, false);
                         sig_sem(SEM_DRW);
                     } else {
-                        //rel_wai(TSK_POL);
+                        //wai_sem(SEM_DRW);
+                        //lcd_clear();
+                        //sig_sem(SEM_DRW);
+                        if (g_err == E_TMOUT)
+                            rel_wai(TSK_POL);
                         wai_sem(SEM_POL);
+                        lcd_clear();
+                        //count = 10;
                         if (g_current == (MAX_RECORD - 1))
                             g_current = 0;
                         else
@@ -643,11 +704,25 @@ void main_task(intptr_t exinf)
                     sig_sem(SEM_POL);
                     break;
                 case Value:
-                    //
+                    g_table[g_current].data[0] = strtol((const char*)val, NULL, 10);
+                    g_err = modbus_write_register(
+                            HOLDING_REGISTER,
+                            0x0001U,
+                            (g_table[g_current].address - 40001),
+                            1,
+                            &g_table[g_current].data[0],
+                            1000
+                    );
+                    g_opt = View;
+                    sprintf((char*)adr, "%05u", g_table[g_current].address);
+                    draw(adr, NULL);
+                    lcd_set_cursor(m_row, 0, true, false);
+                    sig_sem(SEM_POL);
                     break;
                 //case View:
                 default:
-                    //rel_wai(TSK_POL);
+                    if (g_err == E_TMOUT)
+                        rel_wai(TSK_POL);
                     wai_sem(SEM_POL);
                     if (m_row == 0) {
                         g_opt = Address;
@@ -661,7 +736,44 @@ void main_task(intptr_t exinf)
                         lcd_clear();
                         dgt = 0;
                         sprintf((char*)adr, "%05u", g_table[g_current].address);
-                        sprintf((char*)val, "%+06d", g_table[g_current].data[0]);
+                        switch (g_dsp) {
+                        case Signed:
+                            sprintf((char*)val, "%+06d", g_table[g_current].data[0]);
+                            break;
+                        case Unsigned:
+                            sprintf((char*)val, "%05d", g_table[g_current].data[0]);
+                            break;
+                        case Hex:
+                            sprintf((char*)val, "%04X", g_table[g_current].data[0]);
+                            break;
+                        case Binary:
+                            for (i = 0; i < 16; i++) {
+                                if (g_table[g_current].data[0] & (0x8000 >> i))
+                                    val[i] = (uint8_t)'1';
+                                else
+                                    val[i] = (uint8_t)'0';
+                            }
+                            val[16] = 0;
+                            break;
+                        case Long:
+                            memcpy(&ltmp, &g_table[g_current].data[0], sizeof(long));
+                            sprintf((char*)val, "%+011ld", ltmp);
+                            break;
+                        case Long_Inverse:
+                            tmp = g_table[g_current].data[0];
+                            g_table[g_current].data[0] = g_table[g_current].data[1];
+                            g_table[g_current].data[1] = tmp;
+                            memcpy(&ltmp, &g_table[g_current].data[0], sizeof(long));
+                            sprintf((char*)val, "%+011ld", ltmp);
+                            break;
+                        case Float:
+                        case Float_Inverse:
+                            break;
+                        //case Double:
+                        //case Double_Inverse:
+                        default:
+                            break;
+                        }
                         draw(adr, val);
                         lcd_set_cursor(1, dgt, false, true);
                     }
@@ -673,40 +785,165 @@ void main_task(intptr_t exinf)
             }
             //sig_sem(SEM_DRW);
         }
+        if ((g_err != E_OK) && (g_opt == View)) {
+            if (count == 0) {
+                wai_sem(SEM_DRW);
+                switch (g_err) {
+                case E_MODBUS_BFNC:
+                    lcd_draw_text(1, 0, (uint8_t*)"<Illegal Func.> ");
+                    break;
+                case E_MODBUS_BADR:
+                    lcd_draw_text(1, 0, (uint8_t*)"<Illegal Addr.> ");
+                    break;
+                case E_MODBUS_BDAT:
+                    lcd_draw_text(1, 0, (uint8_t*)"<Illegal Data>  ");
+                    break;
+                case E_MODBUS_BCRC:
+                    lcd_draw_text(1, 0, (uint8_t*)"<CRC not match> ");
+                    break;
+                case E_MODBUS_BUNK:
+                    lcd_draw_text(1, 0, (uint8_t*)"<Unknown Excp.> ");
+                    break;
+                default:
+                    lcd_draw_text(1, 0, (uint8_t*)"<Comm. Timeout> ");
+                    break;
+                }
+                lcd_set_cursor(m_row, 0, true, false);
+                sig_sem(SEM_DRW);
+            } else
+            if (count == 5) {
+                wai_sem(SEM_DRW);
+                lcd_draw_text(1, 0, (uint8_t*)"                ");
+                lcd_set_cursor(m_row, 0, true, false);
+                sig_sem(SEM_DRW);
+            }
+        }
+        count++;
+        if (count == 10)
+            count = 0;
     }
 }
 
-void poll_task(intptr_t exinf)
+void __attribute__ ((section (".subtext"))) poll_task(intptr_t exinf)
 {
     uint16_t top;
-    ER ret;
-    //uint16_t reg[4];
+    MODBUS_FUNC fnc;
+    uint16_t crr;
+    uint8_t buf[32];
+    int num;
+    int i;
+    long ltmp;
+    uint16_t tmp;
 
     while (1) {
         wai_sem(SEM_POL);
         top = g_table[g_current].address / 10000;
         switch (top) {
         case 0:
-            break;
         case 1:
+            if (top == 0) {
+                fnc = COIL_STATUS;
+                crr = 1;
+            } else {
+                fnc = INPUT_STATUS;
+                crr = 10001;
+            }
+            g_err = modbus_read_status(
+                    fnc,
+                    0x0001U,
+                    (g_table[g_current].address - crr),
+                    1,
+                    (uint8_t*)&g_table[g_current].data[0],
+                    1000
+                    );
+            if (g_err != E_OK)
+                break;
+            sprintf((char*)buf, "%u", (g_table[g_current].data[0] & 0x0001U));
+            wai_sem(SEM_DRW);
+            lcd_set_cursor(m_row, 0, false, false);
+            lcd_draw_text(1, 0, (uint8_t*)buf);
+            lcd_set_cursor(m_row, 0, true, false);
+            sig_sem(SEM_DRW);
             break;
         case 3:
-            break;
         case 4:
-            ret = modbus_read_register(
-                    HOLDING_REGISTER,
+            if (top == 3) {
+                fnc = INPUT_REGISTER;
+                crr = 30001;
+            } else {
+                fnc = HOLDING_REGISTER;
+                crr = 40001;
+            }
+            switch (g_dsp) {
+            case Signed:
+            case Unsigned:
+            case Hex:
+            case Binary:
+                num = 1;
+                break;
+            case Long:
+            case Long_Inverse:
+            case Float:
+            case Float_Inverse:
+                num = 2;
+                break;
+            //case Double:
+            //case Double_Inverse:
+            default:
+                num = 4;
+                break;
+            }
+            g_err = modbus_read_register(
+                    fnc,
                     0x0001U,
-                    (g_table[g_current].address - 40001),
-                    1,
+                    (g_table[g_current].address - crr),
+                    num,
                     &g_table[g_current].data[0],
                     1000
                     );
-            if (ret != E_OK)
+            if (g_err != E_OK)
                 break;
-            sprintf((char*)m_buf, "%d", g_table[g_current].data[0]);
+            switch (g_dsp) {
+            case Signed:
+                sprintf((char*)buf, "%d", g_table[g_current].data[0]);
+                break;
+            case Unsigned:
+                sprintf((char*)buf, "%u", g_table[g_current].data[0]);
+                break;
+            case Hex:
+                sprintf((char*)buf, "%X", g_table[g_current].data[0]);
+                break;
+            case Binary:
+                for (i = 0; i < 16; i++) {
+                    if (g_table[g_current].data[0] & (0x8000 >> i))
+                        buf[i] = (uint8_t)'1';
+                    else
+                        buf[i] = (uint8_t)'0';
+                }
+                buf[16] = 0;
+                break;
+            case Long:
+                memcpy(&ltmp, &g_table[g_current].data[0], sizeof(long));
+                sprintf((char*)buf, "%ld", ltmp);
+               break;
+            case Long_Inverse:
+                tmp = g_table[g_current].data[0];
+                g_table[g_current].data[0] = g_table[g_current].data[1];
+                g_table[g_current].data[1] = tmp;
+                memcpy(&ltmp, &g_table[g_current].data[0], sizeof(long));
+                sprintf((char*)buf, "%ld", ltmp);
+                break;
+            case Float:
+            case Float_Inverse:
+                break;
+            //case Double:
+            //case Double_Inverse:
+            default:
+                break;
+            }
             wai_sem(SEM_DRW);
             lcd_set_cursor(m_row, 0, false, false);
-            lcd_draw_text(1, 0, (uint8_t*)m_buf);
+            lcd_draw_text(1, 0, (uint8_t*)buf);
             lcd_set_cursor(m_row, 0, true, false);
             sig_sem(SEM_DRW);
             break;
@@ -714,7 +951,6 @@ void poll_task(intptr_t exinf)
             break;
         }
         sig_sem(SEM_POL);
-        //dly_tsk(100);
     }
 }
 
