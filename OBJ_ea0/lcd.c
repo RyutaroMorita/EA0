@@ -13,7 +13,7 @@
 
 #define CMD 0x00
 #define DAT 0x40
-//#define DLY 5000U
+#define DLY 5000U
 
 extern I2C_HandleTypeDef i2c;
 
@@ -22,13 +22,13 @@ static bool_t m_visible = false;
 static bool_t m_blink = false;
 
 
-void lcd_clear(void)
+__attribute__ ((section (".subtext"))) void lcd_clear(void)
 {
     uint8_t buf[2];
     //volatile int i;
 
     if (!m_init)
-        return false;
+        return;
 
     buf[0] = CMD;
     buf[1] = 0x01;  // Clear Display
@@ -37,7 +37,7 @@ void lcd_clear(void)
     //for (i = 0; i < DLY; i++);
 }
 
-void lcd_init(void)
+__attribute__ ((section (".subtext"))) void lcd_init(void)
 {
     uint8_t buf[2];
 
@@ -94,7 +94,7 @@ void lcd_init(void)
     lcd_clear();
 }
 
-bool_t lcd_set_cursor(uint8_t row, uint8_t col, bool_t visible, bool_t blink)
+__attribute__ ((section (".subtext"))) bool_t lcd_set_cursor(uint8_t row, uint8_t col, bool_t visible, bool_t blink)
 {
     uint8_t buf[2];
     uint8_t tmp = 0x0C;
@@ -136,7 +136,7 @@ bool_t lcd_set_cursor(uint8_t row, uint8_t col, bool_t visible, bool_t blink)
     return true;
 }
 
-void lcd_draw_text(uint8_t row, uint8_t col, uint8_t* text)
+__attribute__ ((section (".subtext"))) void lcd_draw_text(uint8_t row, uint8_t col, uint8_t* text)
 {
     uint8_t buf[2];
     uint8_t *p;
@@ -144,7 +144,7 @@ void lcd_draw_text(uint8_t row, uint8_t col, uint8_t* text)
     bool_t eot = false;
 
     if (!m_init)
-        return false;
+        return;
 
     if (strlen((const char*)text) == 0)
         return;

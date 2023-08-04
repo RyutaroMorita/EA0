@@ -34,7 +34,7 @@
 *
 ******************************************************************************/
 
-static void init_buf(UART_HandleTypeDef* uart)
+__attribute__ ((section (".subtext"))) static void init_buf(UART_HandleTypeDef* uart)
 {
 	int init;
 
@@ -57,7 +57,7 @@ static void init_buf(UART_HandleTypeDef* uart)
 * DSR, CD は 無いので常時 1 とする
 ******************************************************************************/
 
-static int get_stat(UART_HandleTypeDef* uart)
+__attribute__ ((section (".subtext"))) static int get_stat(UART_HandleTypeDef* uart)
 {
 	int stat;
 	int sr;
@@ -87,7 +87,7 @@ static int get_stat(UART_HandleTypeDef* uart)
 * ＳＩＯデバイス初期化（内部関数）
 *
 ******************************************************************************/
-static int init_sio(UART_HandleTypeDef* uart, uint8_t parity, uint8_t numberofStopBits, uint32_t baud)
+__attribute__ ((section (".subtext"))) static int init_sio(UART_HandleTypeDef* uart, uint8_t parity, uint8_t numberofStopBits, uint32_t baud)
 {
     // From Table 36-4 in the family user's manual where UCOS16 = 0 and
     //            baudrate = 9600
@@ -144,7 +144,7 @@ static int init_sio(UART_HandleTypeDef* uart, uint8_t parity, uint8_t numberofSt
 *
 ******************************************************************************/
 
-static void dis_int_sio(UART_HandleTypeDef* uart)
+__attribute__ ((section (".subtext"))) static void dis_int_sio(UART_HandleTypeDef* uart)
 {
     USCI_A_UART_disableInterrupt(
             uart->reg,
@@ -165,7 +165,7 @@ static void dis_int_sio(UART_HandleTypeDef* uart)
 *
 ******************************************************************************/
 
-static void ena_int_sio(UART_HandleTypeDef* uart)
+__attribute__ ((section (".subtext"))) static void ena_int_sio(UART_HandleTypeDef* uart)
 {
     USCI_A_UART_enableInterrupt(
             uart->reg,
@@ -185,7 +185,7 @@ static void ena_int_sio(UART_HandleTypeDef* uart)
 * 受信バッファクリア（内部関数）
 *
 ******************************************************************************/
-static void clr_rxbuf(UART_HandleTypeDef* uart)
+__attribute__ ((section (".subtext"))) static void clr_rxbuf(UART_HandleTypeDef* uart)
 {
 	/* 受信バッファクリア */
 
@@ -201,7 +201,7 @@ static void clr_rxbuf(UART_HandleTypeDef* uart)
 *
 ******************************************************************************/
 
-static void put_rxbuf(UART_HandleTypeDef* uart)
+__attribute__ ((section (".subtext"))) static void put_rxbuf(UART_HandleTypeDef* uart)
 {
 	int cnt;
 	uint8_t *p;
@@ -244,7 +244,7 @@ static void put_rxbuf(UART_HandleTypeDef* uart)
 * バッファ空で取得できなかった場合は、-1 を返す。
 ******************************************************************************/
 
-static int get_rxbuf(UART_HandleTypeDef* uart, uint8_t *c)
+__attribute__ ((section (".subtext"))) static int get_rxbuf(UART_HandleTypeDef* uart, uint8_t *c)
 {
 	int cnt;
 	int sts;
@@ -283,7 +283,7 @@ static int get_rxbuf(UART_HandleTypeDef* uart, uint8_t *c)
 *
 ******************************************************************************/
 
-static void rx_int(UART_HandleTypeDef* uart)
+__attribute__ ((section (".subtext"))) static void rx_int(UART_HandleTypeDef* uart)
 {
 	int sts;
 	int chr;
@@ -337,7 +337,7 @@ void uart_isr(UART_HandleTypeDef* uart)
 *
 ******************************************************************************/
 
-static int set_param(const char *s, uint8_t* pParity, uint8_t* pNumberofStopBits, uint32_t *baud)
+__attribute__ ((section (".subtext"))) static int set_param(const char *s, uint8_t* pParity, uint8_t* pNumberofStopBits, uint32_t *baud)
 {
 	char c;
 	uint32_t b;
@@ -396,7 +396,7 @@ static int set_param(const char *s, uint8_t* pParity, uint8_t* pNumberofStopBits
 *
 ******************************************************************************/
 
-ER ini_sio(UART_HandleTypeDef* uart, const char *param)
+__attribute__ ((section (".subtext"))) ER ini_sio(UART_HandleTypeDef* uart, const char *param)
 {
 	uint32_t baud;
 	uint8_t parity;
@@ -431,7 +431,7 @@ ER ini_sio(UART_HandleTypeDef* uart, const char *param)
 *
 ******************************************************************************/
 
-void ext_sio(UART_HandleTypeDef* uart)
+__attribute__ ((section (".subtext"))) void ext_sio(UART_HandleTypeDef* uart)
 {
 	if (!(uart->uartb.flag & TSF_INIT))	/* 未初期化なら何もしない */
 		return;
@@ -448,7 +448,7 @@ void ext_sio(UART_HandleTypeDef* uart)
 *
 ******************************************************************************/
 
-ER get_sio(UART_HandleTypeDef* uart, uint8_t *c, TMO tmout)
+__attribute__ ((section (".subtext"))) ER get_sio(UART_HandleTypeDef* uart, uint8_t *c, TMO tmout)
 {
 	ER ercd;
 	int sts;
@@ -506,7 +506,7 @@ ER get_sio(UART_HandleTypeDef* uart, uint8_t *c, TMO tmout)
 *
 ******************************************************************************/
 
-ER put_sio(UART_HandleTypeDef* uart, uint8_t c, TMO tmout)
+__attribute__ ((section (".subtext"))) ER put_sio(UART_HandleTypeDef* uart, uint8_t c, TMO tmout)
 {
 	ER ercd;
 	ER_UINT wupcnt;
@@ -536,7 +536,7 @@ ER put_sio(UART_HandleTypeDef* uart, uint8_t c, TMO tmout)
 *
 ******************************************************************************/
 
-ER ctl_sio(UART_HandleTypeDef* uart, uint16_t fncd)
+__attribute__ ((section (".subtext"))) ER ctl_sio(UART_HandleTypeDef* uart, uint16_t fncd)
 {
     Asm("nop");
     Asm("dint");
@@ -559,7 +559,7 @@ ER ctl_sio(UART_HandleTypeDef* uart, uint16_t fncd)
 *
 ******************************************************************************/
 
-ER ref_sio(UART_HandleTypeDef* uart, T_UARTS *pk_sios)
+__attribute__ ((section (".subtext"))) ER ref_sio(UART_HandleTypeDef* uart, T_UARTS *pk_sios)
 {
 	int stat;
 

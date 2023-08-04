@@ -80,12 +80,14 @@
 #ifndef TOPPERS_MACRO_ONLY
 #ifdef TOPPERS_GDB_STUB				/* GDBスタブ */
 
+/*
 Inline void
 TOPPERS_assert_abort(void)
 {
 //	Asm("trap #2");
 	while(1);
 }
+*/
 
 #else /* TOPPERS_GDB_STUB */		/* その他の開発環境 */
 

@@ -24,13 +24,13 @@ uint8_t m_buf[32];
 bool_t m_f485 = false;
 
 
-void modbus_set_mode(bool_t f485)
+__attribute__ ((section (".subtext"))) void modbus_set_mode(bool_t f485)
 {
     m_f485 = f485;
     MAX3485__RE_LOW;
 }
 
-static uint16_t get_crc(uint8_t *z_p, uint32_t z_message_length)
+__attribute__ ((section (".subtext"))) static uint16_t get_crc(uint8_t *z_p, uint32_t z_message_length)
 {
     uint16_t crc= 0xffff;
     uint16_t next;
@@ -52,7 +52,7 @@ static uint16_t get_crc(uint8_t *z_p, uint32_t z_message_length)
     return crc;
 }
 
-static __attribute__ ((section (".subtext"))) ER modbus_read(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, void* pBuf, TMO tmout)
+__attribute__ ((section (".subtext"))) static ER modbus_read(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, void* pBuf, TMO tmout)
 {
     uint16_t crc;
     int len;
@@ -75,7 +75,7 @@ static __attribute__ ((section (".subtext"))) ER modbus_read(MODBUS_FUNC fnc, ui
         fnc = 0x01;
         break;
     case INPUT_STATUS:
-        fnc = 0x01;
+        fnc = 0x02;
         break;
     case HOLDING_REGISTER:
         fnc = 0x03;
@@ -236,7 +236,7 @@ static __attribute__ ((section (".subtext"))) ER modbus_read(MODBUS_FUNC fnc, ui
 
     p = &m_buf[0];
     p += 3;
-    if ((fnc == COIL_STATUS) || (fnc == INPUT_STATUS)) {
+    if ((fnc == 0x01) || (fnc == 0x02)) {
         if (num % 8) {
             num = (num / 8) + 1;
         } else {
@@ -259,21 +259,21 @@ static __attribute__ ((section (".subtext"))) ER modbus_read(MODBUS_FUNC fnc, ui
     return E_OK;
 }
 
-ER modbus_read_status(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, uint8_t* pBuf, TMO tmout)
+__attribute__ ((section (".subtext"))) ER modbus_read_status(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, uint8_t* pBuf, TMO tmout)
 {
     if ((fnc != COIL_STATUS) && (fnc != INPUT_STATUS))
         return E_PAR;
     return modbus_read(fnc, sla, sta, num, (void*)pBuf, tmout);
 }
 
-ER modbus_read_register(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, uint16_t* pBuf, TMO tmout)
+__attribute__ ((section (".subtext"))) ER modbus_read_register(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, uint16_t* pBuf, TMO tmout)
 {
     if ((fnc != HOLDING_REGISTER) && (fnc != INPUT_REGISTER))
         return E_PAR;
     return modbus_read(fnc, sla, sta, num, (void*)pBuf, tmout);
 }
 
-static __attribute__ ((section (".subtext"))) ER modbus_write(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, void* pBuf, TMO tmout)
+__attribute__ ((section (".subtext"))) static ER modbus_write(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, void* pBuf, TMO tmout)
 {
     bool_t mul = false;
     uint8_t* pByte;
@@ -565,14 +565,14 @@ static __attribute__ ((section (".subtext"))) ER modbus_write(MODBUS_FUNC fnc, u
     return E_OK;
 }
 
-ER modbus_write_status(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, uint8_t* pBuf, TMO tmout)
+__attribute__ ((section (".subtext"))) ER modbus_write_status(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, uint8_t* pBuf, TMO tmout)
 {
     if (fnc != COIL_STATUS)
         return E_PAR;
     return modbus_write(fnc, sla, sta, num, (void*)pBuf, tmout);
 }
 
-ER modbus_write_register(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, uint16_t* pBuf, TMO tmout)
+__attribute__ ((section (".subtext"))) ER modbus_write_register(MODBUS_FUNC fnc, uint16_t sla, uint16_t sta, int num, uint16_t* pBuf, TMO tmout)
 {
     if (fnc != HOLDING_REGISTER)
         return E_PAR;

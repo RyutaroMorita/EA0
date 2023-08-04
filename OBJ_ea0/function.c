@@ -32,7 +32,7 @@ static KEY_STATE m_key[] = {
 
 
 /* ファンクションキータスク */
-void function_task(intptr_t exinf)
+__attribute__ ((section (".subtext"))) void function_task(intptr_t exinf)
 {
 	uint16_t sample[3];
 	uint16_t flg;
@@ -110,7 +110,7 @@ void function_task(intptr_t exinf)
 }
 
 /* ファンクションキーの初期化 */
-void function_init(void)
+__attribute__ ((section (".subtext"))) void function_init(void)
 {
 	act_tsk(TSK_FNC);
 }
