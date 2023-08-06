@@ -286,7 +286,7 @@ __attribute__ ((section (".subtext"))) static uint8_t get_next_drum(DSP_MODE mod
     const uint8_t* p;
 
     switch (mode) {
-    case Signed:
+    //case Signed:
     case Long:
     case Long_Inverse:
         if (digit == 0) {
@@ -309,11 +309,10 @@ __attribute__ ((section (".subtext"))) static uint8_t get_next_drum(DSP_MODE mod
         siz = sizeof(drum_binary);
         p = &drum_binary[0];
         break;
-    //case Float:
-    //case Float_Inverse:
-    //case Double:
-    //case Double_Inverse:
-    default:
+    case Float:
+    case Float_Inverse:
+    case Double:
+    case Double_Inverse:
         if (digit == 0) {
             siz = sizeof(drum_polarity);
             p = &drum_polarity[0];
@@ -325,6 +324,16 @@ __attribute__ ((section (".subtext"))) static uint8_t get_next_drum(DSP_MODE mod
                 siz = sizeof(drum_decimal);
                 p = &drum_decimal[0];
             }
+        }
+        break;
+    //case Signed:
+    default:
+        if (digit == 0) {
+            siz = sizeof(drum_polarity);
+            p = &drum_polarity[0];
+        } else {
+            siz = sizeof(drum_decimal);
+            p = &drum_decimal[0];
         }
         break;
     }
@@ -351,7 +360,7 @@ __attribute__ ((section (".subtext"))) static uint8_t get_back_drum(DSP_MODE mod
     const uint8_t* p;
 
     switch (mode) {
-    case Signed:
+    //case Signed:
     case Long:
     case Long_Inverse:
         if (digit == 0) {
@@ -374,11 +383,10 @@ __attribute__ ((section (".subtext"))) static uint8_t get_back_drum(DSP_MODE mod
         siz = sizeof(drum_binary);
         p = &drum_binary[0];
         break;
-    //case Float:
-    //case Float_Inverse:
-    //case Double:
-    //case Double_Inverse:
-    default:
+    case Float:
+    case Float_Inverse:
+    case Double:
+    case Double_Inverse:
         if (digit == 0) {
             siz = sizeof(drum_polarity);
             p = &drum_polarity[0];
@@ -390,6 +398,16 @@ __attribute__ ((section (".subtext"))) static uint8_t get_back_drum(DSP_MODE mod
                 siz = sizeof(drum_decimal);
                 p = &drum_decimal[0];
             }
+        }
+        break;
+    //case Signed:
+    default:
+        if (digit == 0) {
+            siz = sizeof(drum_polarity);
+            p = &drum_polarity[0];
+        } else {
+            siz = sizeof(drum_decimal);
+            p = &drum_decimal[0];
         }
         break;
     }
@@ -423,9 +441,9 @@ __attribute__ ((section (".subtext"))) static int get_digits(DSP_MODE mode)
 {
     int dgt;
     switch (mode) {
-    case Signed:
-        dgt = 6;
-        break;
+    //case Signed:
+    //    dgt = 6;
+    //    break;
     case Unsigned:
         dgt = 5;
         break;
@@ -441,12 +459,15 @@ __attribute__ ((section (".subtext"))) static int get_digits(DSP_MODE mode)
         break;
     case Float:
     case Float_Inverse:
-        dgt = 8;
-        break;
-    //case Double:
-    //case Double_Inverse:
-    default:
         dgt = 16;
+        break;
+    case Double:
+    case Double_Inverse:
+        dgt = 16;
+        break;
+    //case Signed:
+    default:
+        dgt = 6;
         break;
     }
     return dgt;
@@ -494,6 +515,34 @@ __attribute__ ((section (".subtext"))) static void disp_error(void)
     }
     lcd_set_cursor(m_row, 0, true, false);
 }
+
+__attribute__ ((section (".subtext"))) static void get_formatted(uint8_t* value)
+{
+    int i;
+    uint8_t buf[32];
+    bool_t find = false;
+    uint8_t* p = value;
+
+    memset(buf, '0', 32);
+
+    for (i = 0; i < 16; i++) {
+        if (!find) {
+            if (*p == 0)
+                find = true;
+        }
+        if (find)
+            buf[i] = '0';
+        else
+            buf[i] = *p;
+        p++;
+    }
+
+    buf[16] = 0;
+
+    strcpy((char*)value, (const char*)buf);
+}
+
+
 /*
  *  printf()やsprintf()で「%f」や「%g」を使用する場合は
  *  リンカのオプションとして「-u _printf_float」を追記すること
@@ -512,6 +561,7 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
     int num;
     long ltmp;
     float ftmp;
+    double dtmp;
     uint16_t reg[4];
     int count = 0;
 /*
@@ -590,9 +640,9 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                     if (g_dsp > Double_Inverse)
                         g_dsp = Signed;
                     switch (g_dsp) {
-                    case Signed:
-                        lcd_draw_text(1, 0, (uint8_t*)"        > Signed");
-                        break;
+                    //case Signed:
+                    //    lcd_draw_text(1, 0, (uint8_t*)"        > Signed");
+                    //    break;
                     case Unsigned:
                         lcd_draw_text(1, 0, (uint8_t*)"      > Unsigned");
                         break;
@@ -617,9 +667,12 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                     case Double:
                         lcd_draw_text(1, 0, (uint8_t*)"        > Double");
                         break;
-                    //case Double_Inverse:
-                    default:
+                    case Double_Inverse:
                         lcd_draw_text(1, 0, (uint8_t*)"   > Double Inv.");
+                        break;
+                    //case Signed:
+                    default:
+                        lcd_draw_text(1, 0, (uint8_t*)"        > Signed");
                         break;
                     }
 //                    dly_tsk(1000);
@@ -794,10 +847,10 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                             crr = 40001;
                         }
                         switch (g_dsp) {
-                        case Signed:
-                            g_table[g_current].data[0] = (uint16_t)strtol((const char*)val, NULL, 10);
-                            num = 1;
-                            break;
+                        //case Signed:
+                        //    g_table[g_current].data[0] = (uint16_t)strtol((const char*)val, NULL, 10);
+                        //    num = 1;
+                        //    break;
                         case Unsigned:
                             g_table[g_current].data[0] = (uint16_t)strtoul((const char*)val, NULL, 10);
                             num = 1;
@@ -838,10 +891,24 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                             g_table[g_current].data[1] = reg[0];
                             num = 2;
                             break;
-                        //case Double:
-                        //case Double_Inverse:
-                        default:
+                        case Double:
+                            dtmp = strtod((const char*)val, NULL);
+                            memcpy(&g_table[g_current].data[0], &dtmp, sizeof(double));
                             num = 4;
+                            break;
+                        case Double_Inverse:
+                            dtmp = strtod((const char*)val, NULL);
+                            memcpy(&reg[0], &dtmp, sizeof(double));
+                            g_table[g_current].data[0] = reg[3];
+                            g_table[g_current].data[1] = reg[2];
+                            g_table[g_current].data[2] = reg[1];
+                            g_table[g_current].data[3] = reg[0];
+                            num = 4;
+                            break;
+                        //case Signed:
+                        default:
+                            g_table[g_current].data[0] = (uint16_t)strtol((const char*)val, NULL, 10);
+                            num = 1;
                             break;
                         }
                         g_err = modbus_write_register(
@@ -892,9 +959,9 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                 //        case 4:
                         default:
                             switch (g_dsp) {
-                            case Signed:
-                                sprintf((char*)val, "%+06d", g_table[g_current].data[0]);
-                                break;
+                            //case Signed:
+                            //    sprintf((char*)val, "%+06d", g_table[g_current].data[0]);
+                            //    break;
                             case Unsigned:
                                 sprintf((char*)val, "%05d", g_table[g_current].data[0]);
                                 break;
@@ -922,43 +989,83 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                                 break;
                             case Float:
                                 memcpy(&ftmp, &g_table[g_current].data[0], sizeof(float));
-                                sprintf((char*)val, "%+08g", ftmp);
+                                sprintf((char*)val, "%+f", ftmp);
                                 if ((strchr((const char*)val, (int)'e') != NULL) ||
                                     (strchr((const char*)val, (int)'n') != NULL) ||
                                     (strchr((const char*)val, (int)'a') != NULL)) {
                                     val[0] = (uint8_t)'+';
-                                    for (i = 1; i < 8; i++)
+                                    for (i = 1; i < 16; i++)
                                         val[i] = (uint8_t)'0';
-                                    val[8] = 0;
+                                    val[16] = 0;
+                                } else {
+                                    get_formatted(val);
                                 }
+#if 0
                                 if ((val[1] == (uint8_t)'0') && (val[2] == (uint8_t)'.')) {
                                     for (i = 1; i < 8; i++)
                                         val[i] = val[i + 1];
                                     val[8] = 0;
                                 }
+#endif
                                 break;
                             case Float_Inverse:
                                 reg[1] = g_table[g_current].data[0];
                                 reg[0] = g_table[g_current].data[1];
                                 memcpy(&ftmp, &reg[0], sizeof(float));
-                                sprintf((char*)val, "%+08g", ftmp);
+                                sprintf((char*)val, "%+f", ftmp);
                                 if ((strchr((const char*)val, (int)'e') != NULL) ||
                                     (strchr((const char*)val, (int)'n') != NULL) ||
                                     (strchr((const char*)val, (int)'a') != NULL)) {
                                     val[0] = (uint8_t)'+';
-                                    for (i = 1; i < 8; i++)
+                                    for (i = 1; i < 16; i++)
                                         val[i] = (uint8_t)'0';
-                                    val[8] = 0;
+                                    val[16] = 0;
+                                } else {
+                                    get_formatted(val);
                                 }
+#if 0
                                 if ((val[1] == (uint8_t)'0') && (val[2] == (uint8_t)'.')) {
                                     for (i = 1; i < 8; i++)
                                         val[i] = val[i + 1];
                                     val[8] = 0;
                                 }
+#endif
                                 break;
-                            //case Double:
-                            //case Double_Inverse:
+                            case Double:
+                                memcpy(&dtmp, &g_table[g_current].data[0], sizeof(double));
+                                sprintf((char*)val, "%+f", (float)dtmp);
+                                if ((strchr((const char*)val, (int)'e') != NULL) ||
+                                    (strchr((const char*)val, (int)'n') != NULL) ||
+                                    (strchr((const char*)val, (int)'a') != NULL)) {
+                                    val[0] = (uint8_t)'+';
+                                    for (i = 1; i < 16; i++)
+                                        val[i] = (uint8_t)'0';
+                                    val[16] = 0;
+                                } else {
+                                    get_formatted(val);
+                                }
+                                break;
+                            case Double_Inverse:
+                                reg[3] = g_table[g_current].data[0];
+                                reg[2] = g_table[g_current].data[1];
+                                reg[1] = g_table[g_current].data[2];
+                                reg[0] = g_table[g_current].data[3];
+                                memcpy(&dtmp, &reg[0], sizeof(double));
+                                sprintf((char*)val, "%+f", (float)dtmp);
+                                if ((strchr((const char*)val, (int)'e') != NULL) ||
+                                    (strchr((const char*)val, (int)'n') != NULL) ||
+                                    (strchr((const char*)val, (int)'a') != NULL)) {
+                                    val[0] = (uint8_t)'+';
+                                    for (i = 1; i < 16; i++)
+                                        val[i] = (uint8_t)'0';
+                                    val[16] = 0;
+                                } else {
+                                    get_formatted(val);
+                                }
+                                break;
+                            //case Signed:
                             default:
+                                sprintf((char*)val, "%+06d", g_table[g_current].data[0]);
                                 break;
                             }
                             break;
@@ -1005,6 +1112,7 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
     int i;
     long ltmp;
     float ftmp;
+    double dtmp;
     uint16_t reg[4];
 
     while (1) {
@@ -1050,7 +1158,7 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
                 crr = 40001;
             }
             switch (g_dsp) {
-            case Signed:
+            //case Signed:
             case Unsigned:
             case Hex:
             case Binary:
@@ -1062,10 +1170,13 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
             case Float_Inverse:
                 num = 2;
                 break;
-            //case Double:
-            //case Double_Inverse:
-            default:
+            case Double:
+            case Double_Inverse:
                 num = 4;
+                break;
+            //case Signed:
+            default:
+                num = 1;
                 break;
             }
             g_err = modbus_read_register(
@@ -1079,9 +1190,9 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
             if (g_err != E_OK)
                 break;
             switch (g_dsp) {
-            case Signed:
-                sprintf((char*)buf, "%d", g_table[g_current].data[0]);
-                break;
+            //case Signed:
+            //    sprintf((char*)buf, "%d", g_table[g_current].data[0]);
+            //    break;
             case Unsigned:
                 sprintf((char*)buf, "%u", g_table[g_current].data[0]);
                 break;
@@ -1109,17 +1220,29 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
                 break;
             case Float:
                 memcpy(&ftmp, &g_table[g_current].data[0], sizeof(float));
-                sprintf((char*)buf, "%g", ftmp);
+                sprintf((char*)buf, "%.6f", ftmp);
                 break;
             case Float_Inverse:
                 reg[1] = g_table[g_current].data[0];
                 reg[0] = g_table[g_current].data[1];
                 memcpy(&ftmp, &reg[0], sizeof(float));
-                sprintf((char*)buf, "%g", ftmp);
+                sprintf((char*)buf, "%.6f", ftmp);
                 break;
-            //case Double:
-            //case Double_Inverse:
+            case Double:
+                memcpy(&dtmp, &g_table[g_current].data[0], sizeof(double));
+                sprintf((char*)buf, "%.6f", (float)dtmp);
+                break;
+            case Double_Inverse:
+                reg[3] = g_table[g_current].data[0];
+                reg[2] = g_table[g_current].data[1];
+                reg[1] = g_table[g_current].data[2];
+                reg[0] = g_table[g_current].data[3];
+                memcpy(&dtmp, &reg[0], sizeof(double));
+                sprintf((char*)buf, "%.6f", (float)dtmp);
+                break;
+            //case Signed:
             default:
+                sprintf((char*)buf, "%d", g_table[g_current].data[0]);
                 break;
             }
             wai_sem(SEM_DRW);
