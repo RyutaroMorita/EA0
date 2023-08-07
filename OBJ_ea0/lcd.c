@@ -180,7 +180,7 @@ __attribute__ ((section (".subtext"))) void lcd_draw_text(uint8_t row, uint8_t c
         else
             buf[1] = 0x20;  // SPACE
         wrt_i2c(&i2c, 0x7c, &buf[0], 2, 10);
-        cnt++;
         //dly_tsk(10);
+        cnt++;
     } while ((col + cnt) < 16);
 }

@@ -58,7 +58,7 @@ __attribute__ ((section (".subtext"))) void function_task(intptr_t exinf)
         }
 		for (i = 0; i < KEYS; i++) {
 			if (~(state) & m_key[i].bit) {
-                if ((i != 2) && (i != 3)) {
+                if ((i != 1) && (i != 2) && (i != 3)) {
                     flg |= (m_key[i].bit);
                 } else {
                     if (m_key[i].count >= toggle) {
