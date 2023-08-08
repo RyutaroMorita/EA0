@@ -20,6 +20,9 @@ extern I2C_HandleTypeDef i2c;
 static bool_t m_init = false;
 static bool_t m_visible = false;
 static bool_t m_blink = false;
+static uint8_t m_backup[2][17];
+static uint8_t m_row;
+static uint8_t m_col;
 
 
 __attribute__ ((section (".subtext"))) void lcd_clear(void)
@@ -94,6 +97,48 @@ __attribute__ ((section (".subtext"))) void lcd_init(void)
     lcd_clear();
 }
 
+__attribute__ ((section (".subtext"))) void lcd_suspend(void)
+{
+    uint8_t buf[2];
+
+    lcd_clear();
+
+    buf[0] = CMD;
+    buf[1] = 0x38;  // Function Set(IS=0)
+    wrt_i2c(&i2c, 0x7c, &buf[0], 2, 10);
+    dly_tsk(10);
+
+    buf[0] = CMD;
+    buf[1] = 0x08;  // Display ON/OFF
+//    buf[1] = 0x0F;  // Display ON/OFF
+    wrt_i2c(&i2c, 0x7c, &buf[0], 2, 10);
+    dly_tsk(10);
+}
+
+__attribute__ ((section (".subtext"))) void lcd_resume(void)
+{
+    uint8_t buf[2];
+    uint8_t row;
+    uint8_t col;
+
+    buf[0] = CMD;
+    buf[1] = 0x38;  // Function Set(IS=0)
+    wrt_i2c(&i2c, 0x7c, &buf[0], 2, 10);
+    dly_tsk(10);
+
+    buf[0] = CMD;
+    buf[1] = 0x0C;  // Display ON/OFF
+//    buf[1] = 0x0F;  // Display ON/OFF
+    wrt_i2c(&i2c, 0x7c, &buf[0], 2, 10);
+    dly_tsk(10);
+
+    row = m_row;
+    col = m_col;
+    lcd_draw_text(0, m_backup[0]);
+    lcd_draw_text(1, m_backup[1]);
+    lcd_set_cursor(row, col, m_visible, m_blink);
+}
+
 __attribute__ ((section (".subtext"))) bool_t lcd_set_cursor(uint8_t row, uint8_t col, bool_t visible, bool_t blink)
 {
     uint8_t buf[2];
@@ -132,11 +177,13 @@ __attribute__ ((section (".subtext"))) bool_t lcd_set_cursor(uint8_t row, uint8_
 
     m_visible = visible;
     m_blink = blink;
+    m_row = row;
+    m_col = col;
 
     return true;
 }
 
-__attribute__ ((section (".subtext"))) void lcd_draw_text(uint8_t row, uint8_t col, uint8_t* text)
+__attribute__ ((section (".subtext"))) void lcd_draw_text(uint8_t row, uint8_t* text)
 {
     uint8_t buf[2];
     uint8_t *p;
@@ -149,8 +196,11 @@ __attribute__ ((section (".subtext"))) void lcd_draw_text(uint8_t row, uint8_t c
     if (strlen((const char*)text) == 0)
         return;
 
-    if (!lcd_set_cursor(row, col, m_visible, m_blink))
+    if (!lcd_set_cursor(row, 0, m_visible, m_blink))
         return;
+
+    memcpy(m_backup[row], text, 16);
+    m_backup[row][16] = 0;
 
 #if 0
     if (row > 1)
@@ -182,5 +232,5 @@ __attribute__ ((section (".subtext"))) void lcd_draw_text(uint8_t row, uint8_t c
         wrt_i2c(&i2c, 0x7c, &buf[0], 2, 10);
         //dly_tsk(10);
         cnt++;
-    } while ((col + cnt) < 16);
+    } while (cnt < 16);
 }

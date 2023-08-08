@@ -41,7 +41,66 @@ typedef enum {
     Address,
     Value,
     View,
+    Setup,
+    Edit,
 } OPT_MODE;
+
+/*
+ *  セットアップメニュー
+ */
+typedef enum {
+    Exit = 0,
+    Suspend,
+    Timer,
+    TargetID,
+    Wiring,
+    Baudrate,
+    DataBit,
+    Parity,
+    StopBit,
+    Battery,
+    Version,
+    Null,
+} MNU_ITEM;
+
+typedef enum {
+    Never = 0,
+    _1Min,
+    _3Min,
+    _5Min,
+    _10Min,
+} MNU_ITEM_TIMER;
+
+typedef enum {
+    RS232C = 0,
+    RS485,
+} MNU_ITEM_WIRING;
+
+typedef enum {
+    _9600 = 0,
+    _14400,
+    _19200,
+    _38400,
+    _56000,
+    _57600,
+    _115200,
+} MNU_ITEM_BAUDRATE;
+
+typedef enum {
+    _8 = 0,
+    _7,
+} MNU_ITEM_DATABIT;
+
+typedef enum {
+    None = 0,
+    Odd,
+    Even,
+} MNU_ITEM_PARITY;
+
+typedef enum {
+    _1 = 0,
+    _2,
+} MNU_ITEM_STOPBIT;
 
 /*
  *  イベントフラグ
