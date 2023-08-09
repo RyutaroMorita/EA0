@@ -94,7 +94,7 @@ __attribute__ ((section (".subtext"))) void lcd_init(void)
 */
     m_init = true;
 
-    lcd_clear();
+    //lcd_clear();
 }
 
 __attribute__ ((section (".subtext"))) void lcd_suspend(void)
@@ -113,14 +113,25 @@ __attribute__ ((section (".subtext"))) void lcd_suspend(void)
 //    buf[1] = 0x0F;  // Display ON/OFF
     wrt_i2c(&i2c, 0x7c, &buf[0], 2, 10);
     dly_tsk(10);
+
+    buf[0] = CMD;
+    buf[1] = 0x39;  // Function Set(IS=1)
+    wrt_i2c(&i2c, 0x7c, &buf[0], 2, 10);
+    dly_tsk(10);
+
+    buf[0] = CMD;
+    buf[1] = 0x50;  // Power/ICON control/Conterast set
+    wrt_i2c(&i2c, 0x7c, &buf[0], 2, 10);
+    dly_tsk(10);
 }
 
 __attribute__ ((section (".subtext"))) void lcd_resume(void)
 {
-    uint8_t buf[2];
+    //uint8_t buf[2];
     uint8_t row;
     uint8_t col;
 
+    /*
     buf[0] = CMD;
     buf[1] = 0x38;  // Function Set(IS=0)
     wrt_i2c(&i2c, 0x7c, &buf[0], 2, 10);
@@ -131,6 +142,9 @@ __attribute__ ((section (".subtext"))) void lcd_resume(void)
 //    buf[1] = 0x0F;  // Display ON/OFF
     wrt_i2c(&i2c, 0x7c, &buf[0], 2, 10);
     dly_tsk(10);
+    */
+
+    lcd_init();
 
     row = m_row;
     col = m_col;

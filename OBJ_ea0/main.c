@@ -151,8 +151,8 @@ static MNU_ITEM_WIRING m_wiring = RS232C;
 static MNU_ITEM_WIRING m_wiring_b;
 static MNU_ITEM_BAUDRATE m_baudrate = _9600;
 static MNU_ITEM_BAUDRATE m_baudrate_b;
-static MNU_ITEM_DATABIT m_databit = _8;
-static MNU_ITEM_DATABIT m_databit_b;
+//static MNU_ITEM_DATABIT m_databit = _8;
+//static MNU_ITEM_DATABIT m_databit_b;
 static MNU_ITEM_PARITY m_parity = None;
 static MNU_ITEM_PARITY m_parity_b;
 static MNU_ITEM_STOPBIT m_stopbit = _1;
@@ -292,6 +292,7 @@ __attribute__ ((section (".subtext"))) static void main_init(void)
     ini_adc(&adc);
 
     lcd_init();
+    lcd_clear();
     function_init();
 }
 
@@ -489,85 +490,77 @@ __attribute__ ((section (".subtext"))) static int get_digits(DSP_MODE mode)
     return dgt;
 }
 
-__attribute__ ((section (".subtext"))) static void draw_view(uint8_t* pAdr, uint8_t* pVal)
+__attribute__ ((section (".subtext"))) static void draw_view(uint8_t* pAdr)
 {
-    //uint8_t adr[8];
     uint8_t idx[8];
     uint8_t buf[32];
 
-    //sprintf((char*)adr, "%05u", g_table[g_current].address);
     if (pAdr != NULL) {
         sprintf((char*)idx, "[%02d/%02d]", g_current + 1, g_records);
         sprintf((char*)buf, "R:%s  %s", pAdr, idx);
         lcd_draw_text(0, (uint8_t*)buf);
     }
-    if (pVal != NULL)
-        //strcpy((char*)buf, (const char*)pVal);
-        lcd_draw_text(1, (uint8_t*)pVal);
-//    lcd_set_cursor(row, col, visible, blink);
 }
 
-__attribute__ ((section (".subtext"))) static void draw_item(MNU_ITEM item, uint8_t* pVal)
+__attribute__ ((section (".subtext"))) static void draw_item(MNU_ITEM item)
 {
     if (item != Null) {
         switch (item) {
         case Exit:
-            lcd_draw_text(0, (uint8_t*)"Exit     [01/11]");
+            lcd_draw_text(0, (uint8_t*)"Exit     [01/10]");
             break;
         case Suspend:
-            lcd_draw_text(0, (uint8_t*)"Suspend  [02/11]");
+            lcd_draw_text(0, (uint8_t*)"Suspend  [02/10]");
             break;
         case Timer:
-            lcd_draw_text(0, (uint8_t*)"Timer    [03/11]");
+            lcd_draw_text(0, (uint8_t*)"Timer    [03/10]");
             break;
         case TargetID:
-            lcd_draw_text(0, (uint8_t*)"TargetID [04/11]");
+            lcd_draw_text(0, (uint8_t*)"TargetID [04/10]");
             break;
         case Wiring:
-            lcd_draw_text(0, (uint8_t*)"Wiring   [05/11]");
+            lcd_draw_text(0, (uint8_t*)"Wiring   [05/10]");
             break;
         case Baudrate:
-            lcd_draw_text(0, (uint8_t*)"Boudrate [06/11]");
+            lcd_draw_text(0, (uint8_t*)"Boudrate [06/10]");
             break;
-        case DataBit:
-            lcd_draw_text(0, (uint8_t*)"DataBit  [07/11]");
-            break;
+//        case DataBit:
+//            lcd_draw_text(0, (uint8_t*)"DataBit  [07/10]");
+//            break;
         case Parity:
-            lcd_draw_text(0, (uint8_t*)"Parity   [08/11]");
+            lcd_draw_text(0, (uint8_t*)"Parity   [07/10]");
             break;
         case StopBit:
-            lcd_draw_text(0, (uint8_t*)"StopBit  [09/11]");
+            lcd_draw_text(0, (uint8_t*)"StopBit  [08/10]");
             break;
         case Battery:
-            lcd_draw_text(0, (uint8_t*)"Battery  [10/11]");
+            lcd_draw_text(0, (uint8_t*)"Battery  [09/10]");
             break;
         //case Version:
         default:
-            lcd_draw_text(0, (uint8_t*)"Version  [11/11]");
+            lcd_draw_text(0, (uint8_t*)"Version  [10/10]");
             break;
         }
     }
-    if (pVal != NULL)
-        lcd_draw_text(1, (uint8_t*)pVal);
 }
 
 __attribute__ ((section (".subtext"))) static void draw_item_timer(MNU_ITEM_TIMER timer)
 {
     switch (timer) {
     case _1Min:
-        draw_item(Null, (uint8_t*)"1 Min.          ");
+        lcd_draw_text(1, (uint8_t*)"1 Min.          ");
         break;
     case _3Min:
-        draw_item(Null, (uint8_t*)"3 Min.          ");
+        lcd_draw_text(1, (uint8_t*)"3 Min.          ");
         break;
     case _5Min:
-        draw_item(Null, (uint8_t*)"5 Min.          ");
+        lcd_draw_text(1, (uint8_t*)"5 Min.          ");
         break;
     case _10Min:
-        draw_item(Null, (uint8_t*)"10 Min.         ");
+        lcd_draw_text(1, (uint8_t*)"10 Min.         ");
         break;
     default:
-        draw_item(Null, (uint8_t*)"None            ");
+        lcd_draw_text(1, (uint8_t*)"None            ");
         break;
     }
 }
@@ -576,10 +569,10 @@ __attribute__ ((section (".subtext"))) static void draw_item_wiring(MNU_ITEM_WIR
 {
     switch (wiring) {
     case RS485:
-        draw_item(Null, (uint8_t*)"RS485           ");
+        lcd_draw_text(1, (uint8_t*)"RS485           ");
         break;
     default:
-        draw_item(Null, (uint8_t*)"RS232C          ");
+        lcd_draw_text(1, (uint8_t*)"RS232C          ");
         break;
     }
 }
@@ -587,53 +580,55 @@ __attribute__ ((section (".subtext"))) static void draw_item_wiring(MNU_ITEM_WIR
 __attribute__ ((section (".subtext"))) static void draw_item_baudrate(MNU_ITEM_BAUDRATE baudrate)
 {
     switch (baudrate) {
-    case _14400:
-        draw_item(Null, (uint8_t*)"14400 Baud      ");
-        break;
+//    case _14400:
+//        lcd_draw_text(1, (uint8_t*)"14400 Baud      ");
+//        break;
     case _19200:
-        draw_item(Null, (uint8_t*)"19200 Baud      ");
+        lcd_draw_text(1, (uint8_t*)"19200 Baud      ");
         break;
     case _38400:
-        draw_item(Null, (uint8_t*)"38400 Baud      ");
+        lcd_draw_text(1, (uint8_t*)"38400 Baud      ");
         break;
-    case _56000:
-        draw_item(Null, (uint8_t*)"56000 Baud      ");
-        break;
+//    case _56000:
+//        lcd_draw_text(1, (uint8_t*)"56000 Baud      ");
+//        break;
     case _57600:
-        draw_item(Null, (uint8_t*)"57600 Baud      ");
+        lcd_draw_text(1, (uint8_t*)"57600 Baud      ");
         break;
     case _115200:
-        draw_item(Null, (uint8_t*)"115200 Baud     ");
+        lcd_draw_text(1, (uint8_t*)"115200 Baud     ");
         break;
     default:
-        draw_item(Null, (uint8_t*)"9600 Baud       ");
+        lcd_draw_text(1, (uint8_t*)"9600 Baud       ");
         break;
     }
 }
 
+/*
 __attribute__ ((section (".subtext"))) static void draw_item_databit(MNU_ITEM_DATABIT databit)
 {
     switch (databit) {
     case _7:
-        draw_item(Null, (uint8_t*)"7 Data bits     ");
+        lcd_draw_text(1, (uint8_t*)"7 Data bits     ");
         break;
     default:
-        draw_item(Null, (uint8_t*)"8 Data bits     ");
+        lcd_draw_text(1, (uint8_t*)"8 Data bits     ");
         break;
     }
 }
+*/
 
 __attribute__ ((section (".subtext"))) static void draw_item_parity(MNU_ITEM_PARITY parity)
 {
     switch (parity) {
     case Odd:
-        draw_item(Null, (uint8_t*)"Odd Parity      ");
+        lcd_draw_text(1, (uint8_t*)"Odd Parity      ");
         break;
     case Even:
-        draw_item(Null, (uint8_t*)"Even Parity     ");
+        lcd_draw_text(1, (uint8_t*)"Even Parity     ");
         break;
     default:
-        draw_item(Null, (uint8_t*)"None Parity     ");
+        lcd_draw_text(1, (uint8_t*)"None Parity     ");
         break;
     }
 }
@@ -642,10 +637,10 @@ __attribute__ ((section (".subtext"))) static void draw_item_stopbit(MNU_ITEM_ST
 {
     switch (stopbit) {
     case _2:
-        draw_item(Null, (uint8_t*)"2 Stop bits     ");
+        lcd_draw_text(1, (uint8_t*)"2 Stop bits     ");
         break;
     default:
-        draw_item(Null, (uint8_t*)"1 Stop bit      ");
+        lcd_draw_text(1, (uint8_t*)"1 Stop bit      ");
         break;
     }
 }
@@ -720,6 +715,65 @@ __attribute__ ((section (".subtext"))) static void suspend(void)
     sig_sem(SEM_DRW);
 }
 
+__attribute__ ((section (".subtext"))) static void setup_serial(void)
+{
+    uint8_t buf[32];
+    ext_sio(&uart);
+
+    switch (m_baudrate) {
+//    case _14400:
+//        strcpy((char*)buf, (const char*)"14400 ");
+//        break;
+    case _19200:
+        strcpy((char*)buf, (const char*)"19200 ");
+        break;
+    case _38400:
+        strcpy((char*)buf, (const char*)"38400 ");
+        break;
+//    case _56000:
+//        strcpy((char*)buf, (const char*)"56000 ");
+//        break;
+    case _57600:
+        strcpy((char*)buf, (const char*)"57600 ");
+        break;
+    case _115200:
+        strcpy((char*)buf, (const char*)"115200 ");
+        break;
+    //case _9600:
+    default:
+        strcpy((char*)buf, (const char*)"9600 ");
+        break;
+    }
+
+    strcat((char*)buf, (const char*)"B8 ");
+
+    switch (m_parity) {
+    case Odd:
+        strcat((char*)buf, (const char*)"PO ");
+        break;
+    case Even:
+        strcat((char*)buf, (const char*)"PE ");
+        break;
+    //case _8:
+    default:
+        strcat((char*)buf, (const char*)"PN ");
+        break;
+    }
+
+    switch (m_stopbit) {
+    case _2:
+        strcat((char*)buf, (const char*)"S2");
+        break;
+    //case _1:
+    default:
+        strcat((char*)buf, (const char*)"S1");
+        break;
+    }
+
+    ini_sio(&uart, (const char*)buf);
+    ctl_sio(&uart, TUART_RXE | TUART_TXE | TUART_DTRON | TUART_RTSON);
+}
+
 /*
  *  printf()やsprintf()で「%f」や「%g」を使用する場合は
  *  リンカのオプションとして「-u _printf_float」を追記すること
@@ -744,16 +798,19 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
     float ftmp;
     double dtmp;
     uint16_t reg[4];
+    bool_t sus = false;
     int count_blink = 0;
     int count_timer = 0;
 
     main_init();
 
+    modbus_set_mode(false); // RS232C
+
     for (i = 0; i < MAX_RECORD; i++)
         g_table[i].address = 1;
 
     sprintf((char*)adr, "%05u", g_table[g_current].address);
-    draw_view(adr, NULL);
+    draw_view(adr);
     lcd_set_cursor(0, (2 + dgt), false, true);
 
     act_tsk(TSK_POL);
@@ -779,7 +836,7 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                         g_current--;
                     g_opt = View;
                     sprintf((char*)adr, "%05u", g_table[g_current].address);
-                    draw_view(adr, NULL);
+                    draw_view(adr);
                     m_row = 1;
                     lcd_set_cursor(m_row, 0, true, false);
                     sig_sem(SEM_POL);
@@ -787,7 +844,7 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                 case Value:
                     g_opt = View;
                     sprintf((char*)adr, "%05u", g_table[g_current].address);
-                    draw_view(adr, NULL);
+                    draw_view(adr);
                     m_row = 1;
                     lcd_set_cursor(m_row, 0, true, false);
                     sig_sem(SEM_POL);
@@ -885,7 +942,7 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                 switch (g_opt) {
                 case Address:
                     adr[dgt] = get_next_drum(Unsigned, adr, dgt, adr[dgt]);
-                    draw_view(adr, NULL);
+                    draw_view(adr);
                     lcd_set_cursor(0, (2 + dgt), false, true);
                     break;
                 case Value:
@@ -901,7 +958,8 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                         val[dgt] = get_next_drum(g_dsp, val, dgt, val[dgt]);
                         break;
                     }
-                    draw_view(NULL, val);
+                    //draw_view(NULL, val);
+                    lcd_draw_text(1, (uint8_t*)val);
                     lcd_set_cursor(1, dgt, false, true);
                     break;
                 case View:
@@ -920,7 +978,7 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                         else
                             g_current--;
                         sprintf((char*)adr, "%05u", g_table[g_current].address);
-                        draw_view(adr, NULL);
+                        draw_view(adr);
                         m_row = 1;
                         lcd_set_cursor(m_row, 0, true, false);
                         sig_sem(SEM_POL);
@@ -935,7 +993,7 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                             g_itm = Version;
                         else
                             g_itm--;
-                        draw_item(g_itm, NULL);
+                        draw_item(g_itm);
                         m_row = 1;
                         lcd_set_cursor(m_row, 0, true, false);
                     }
@@ -953,7 +1011,7 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                         break;
                     case TargetID:
                         val[dgt] = get_next_drum(Unsigned, val, dgt, val[dgt]);
-                        draw_item(Null, val);
+                        lcd_draw_text(1, val);
                         lcd_set_cursor(1, dgt, false, true);
                         break;
                     case Wiring:
@@ -972,6 +1030,7 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                         draw_item_baudrate(m_baudrate_b);
                         lcd_set_cursor(1, 0, false, true);
                         break;
+/*
                     case DataBit:
                         if (m_databit_b == _8)
                             m_databit_b = _7;
@@ -980,6 +1039,7 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                         draw_item_databit(m_databit_b);
                         lcd_set_cursor(1, 0, false, true);
                         break;
+*/
                     case Parity:
                         if (m_parity_b == Even)
                             m_parity_b = None;
@@ -1009,7 +1069,7 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                 switch (g_opt) {
                 case Address:
                     adr[dgt] = get_back_drum(Unsigned, adr, dgt, adr[dgt]);
-                    draw_view(adr, NULL);
+                    draw_view(adr);
                     lcd_set_cursor(0, (2 + dgt), false, true);
                     break;
                 case Value:
@@ -1025,7 +1085,8 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                         val[dgt] = get_back_drum(g_dsp, val, dgt, val[dgt]);
                         break;
                     }
-                    draw_view(NULL, val);
+                    //draw_view(NULL, val);
+                    lcd_draw_text(1, (uint8_t*)val);
                     lcd_set_cursor(1, dgt, false, true);
                     break;
                 case View:
@@ -1048,12 +1109,12 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                             lcd_clear();
                             dgt = 0;
                             sprintf((char*)adr, "%05u", g_table[g_current].address);
-                            draw_view(adr, NULL);
+                            draw_view(adr);
                             m_row = 0;
                             lcd_set_cursor(m_row, (2 + dgt), false, true);
                         } else {
                             sprintf((char*)adr, "%05u", g_table[g_current].address);
-                            draw_view(adr, NULL);
+                            draw_view(adr);
                             m_row = 0;
                             lcd_set_cursor(m_row, 0, true, false);
                             sig_sem(SEM_POL);
@@ -1069,7 +1130,7 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                             g_itm = Exit;
                         else
                             g_itm++;
-                        draw_item(g_itm, NULL);
+                        draw_item(g_itm);
                         m_row = 0;
                         lcd_set_cursor(m_row, 0, true, false);
                     }
@@ -1087,7 +1148,7 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                         break;
                     case TargetID:
                         val[dgt] = get_back_drum(Unsigned, val, dgt, val[dgt]);
-                        draw_item(Null, val);
+                        lcd_draw_text(1, val);
                         lcd_set_cursor(1, dgt, false, true);
                         break;
                     case Wiring:
@@ -1106,6 +1167,7 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                         draw_item_baudrate(m_baudrate_b);
                         lcd_set_cursor(1, 0, false, true);
                         break;
+/*
                     case DataBit:
                         if (m_databit_b == _8)
                             m_databit_b = _7;
@@ -1114,6 +1176,7 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                         draw_item_databit(m_databit_b);
                         lcd_set_cursor(1, 0, false, true);
                         break;
+*/
                     case Parity:
                         if (m_parity_b == None)
                             m_parity_b = Even;
@@ -1147,7 +1210,7 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                     g_records = get_records();
                     g_opt = View;
                     sprintf((char*)adr, "%05u", g_table[g_current].address);
-                    draw_view(adr, NULL);
+                    draw_view(adr);
                     lcd_set_cursor(m_row, 0, true, false);
                     sig_sem(SEM_POL);
                     break;
@@ -1169,7 +1232,7 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                             g_table[g_current].data[0] = 0xFF00;
                         g_err = modbus_write_status(
                                 fnc,
-                                0x0001U,
+                                m_id,
                                 (g_table[g_current].address - crr),
                                 1,
                                 (uint8_t*)&g_table[g_current].data[0],
@@ -1249,7 +1312,7 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                         }
                         g_err = modbus_write_register(
                                 fnc,
-                                0x0001U,
+                                m_id,
                                 (g_table[g_current].address - crr),
                                 num,
                                 &g_table[g_current].data[0],
@@ -1264,7 +1327,7 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                     dly_tsk(10);
                     g_opt = View;
                     sprintf((char*)adr, "%05u", g_table[g_current].address);
-                    draw_view(adr, NULL);
+                    draw_view(adr);
                     lcd_set_cursor(m_row, 0, true, false);
                     sig_sem(SEM_POL);
                     break;
@@ -1277,7 +1340,7 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                         lcd_clear();
                         dgt = 0;
                         sprintf((char*)adr, "%05u", g_table[g_current].address);
-                        draw_view(adr, NULL);
+                        draw_view(adr);
                         lcd_set_cursor(0, (2 + dgt), false, true);
                     } else {
                         g_opt = Value;
@@ -1323,7 +1386,8 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                             }
                             break;
                         }
-                        draw_view(adr, val);
+                        draw_view(adr);
+                        lcd_draw_text(1, (uint8_t*)val);
                         lcd_set_cursor(1, dgt, false, true);
                     }
                     break;
@@ -1336,17 +1400,18 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                     sprintf((char*)val, "%05u", m_id);
                     m_wiring_b = m_wiring;
                     m_baudrate_b = m_baudrate;
-                    m_databit_b = m_databit;
+                    //m_databit_b = m_databit;
                     m_parity_b = m_parity;
                     m_stopbit_b = m_stopbit;
                     if (g_itm == TargetID) {
                         lcd_clear();
                         dgt = 0;
-                        draw_item(g_itm, val);
+                        draw_item(g_itm);
+                        lcd_draw_text(1, (uint8_t*)val);
                         m_row = 1;
                         lcd_set_cursor(m_row, dgt, false, true);
                     } else {
-                        draw_item(g_itm, NULL);
+                        draw_item(g_itm);
                         m_row = 1;
                         lcd_set_cursor(m_row, 0, false, true);
                     }
@@ -1354,31 +1419,36 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                 //case Edit:
                 default:
                     if (g_itm == Exit) {
+                        modbus_set_mode((m_wiring == RS485));
+                        setup_serial();
                         if (!g_table[g_current].registered) {
                             g_opt = Address;
                             lcd_clear();
                             dgt = 0;
                             sprintf((char*)adr, "%05u", g_table[g_current].address);
-                            draw_view(adr, NULL);
+                            draw_view(adr);
                             m_row = 0;
                             lcd_set_cursor(m_row, (2 + dgt), false, true);
                         } else {
                             g_opt = View;
                             lcd_clear();
                             sprintf((char*)adr, "%05u", g_table[g_current].address);
-                            draw_view(adr, NULL);
+                            draw_view(adr);
                             m_row = m_row_b;
                             lcd_set_cursor(m_row, 0, true, false);
                             sig_sem(SEM_POL);
                         }
                         break;
                     }
+                    if (g_itm == Suspend) {
+                        sus = true;
+                    }
                     g_opt = Setup;
                     m_timer = m_timer_b;
                     m_id = (uint16_t)strtoul((const char*)val, NULL, 10);
                     m_wiring = m_wiring_b;
                     m_baudrate = m_baudrate_b;
-                    m_databit = m_databit_b;
+                    //m_databit = m_databit_b;
                     m_parity = m_parity_b;
                     m_stopbit = m_stopbit_b;
                     lcd_set_cursor(m_row, 0, true, false);
@@ -1397,10 +1467,31 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                     dly_tsk(1000);
                     g_opt = Setup;
                     g_itm = Exit;
-                    draw_item(g_itm, NULL);
+                    draw_item(g_itm);
                     m_row_b = m_row;
                     m_row = 0;
                     lcd_set_cursor(m_row, 0, true, false);
+                } else
+                if ((g_opt != Address) && (g_opt != Value) && (g_opt != View)) {
+                    modbus_set_mode((m_wiring == RS485));
+                    setup_serial();
+                    if (!g_table[g_current].registered) {
+                        g_opt = Address;
+                        lcd_clear();
+                        dgt = 0;
+                        sprintf((char*)adr, "%05u", g_table[g_current].address);
+                        draw_view(adr);
+                        m_row = 0;
+                        lcd_set_cursor(m_row, (2 + dgt), false, true);
+                    } else {
+                        g_opt = View;
+                        lcd_clear();
+                        sprintf((char*)adr, "%05u", g_table[g_current].address);
+                        draw_view(adr);
+                        m_row = m_row_b;
+                        lcd_set_cursor(m_row, 0, true, false);
+                        sig_sem(SEM_POL);
+                    }
                 }
             }
         }
@@ -1429,7 +1520,7 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
             switch (g_itm) {
             case Exit:
             case Suspend:
-                draw_item(Null, (uint8_t*)">               ");
+                lcd_draw_text(1, (uint8_t*)">               ");
                 break;
             case Timer:
                 draw_item_timer(m_timer);
@@ -1437,7 +1528,7 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
             case TargetID:
                 sprintf((char*)id, "%u", m_id);
                 //sprintf((char*)m_buf, "%05u", m_id);
-                draw_item(Null, id);
+                lcd_draw_text(1, id);
                 break;
             case Wiring:
                 draw_item_wiring(m_wiring);
@@ -1445,9 +1536,9 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
             case Baudrate:
                 draw_item_baudrate(m_baudrate);
                 break;
-            case DataBit:
-                draw_item_databit(m_databit);
-                break;
+//            case DataBit:
+//                draw_item_databit(m_databit);
+//                break;
             case Parity:
                 draw_item_parity(m_parity);
                 break;
@@ -1455,11 +1546,11 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                 draw_item_stopbit(m_stopbit);
                 break;
             case Battery:
-                draw_item(Null, (uint8_t*)"100%            ");
+                lcd_draw_text(1, (uint8_t*)"100%            ");
                 break;
             //case Version:
             default:
-                draw_item(Null, (uint8_t*)"01.00.00.00     ");
+                lcd_draw_text(1, (uint8_t*)"01.00.00.00     ");
                 break;
             }
             lcd_set_cursor(m_row, 0, true, false);
@@ -1484,8 +1575,14 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
             break;
         default:
             timer = -1;
+            break;
         }
         if ((timer > 0) && (count_timer == timer)) {
+            suspend();
+            cancel = true;
+        }
+        if (sus) {
+            sus = false;
             suspend();
             cancel = true;
         }
@@ -1528,7 +1625,7 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
             }
             g_err = modbus_read_status(
                     fnc,
-                    0x0001U,
+                    m_id,
                     (g_table[g_current].address - crr),
                     1,
                     (uint8_t*)&g_table[g_current].data[0],
@@ -1622,7 +1719,7 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
             }
             g_err = modbus_read_register(
                     fnc,
-                    0x0001U,
+                    m_id,
                     (g_table[g_current].address - crr),
                     num,
                     &g_table[g_current].data[0],

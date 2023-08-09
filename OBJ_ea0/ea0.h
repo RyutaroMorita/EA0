@@ -55,7 +55,7 @@ typedef enum {
     TargetID,
     Wiring,
     Baudrate,
-    DataBit,
+//    DataBit,
     Parity,
     StopBit,
     Battery,
@@ -78,18 +78,18 @@ typedef enum {
 
 typedef enum {
     _9600 = 0,
-    _14400,
     _19200,
     _38400,
-    _56000,
     _57600,
     _115200,
 } MNU_ITEM_BAUDRATE;
 
+/*
 typedef enum {
     _8 = 0,
     _7,
 } MNU_ITEM_DATABIT;
+*/
 
 typedef enum {
     None = 0,

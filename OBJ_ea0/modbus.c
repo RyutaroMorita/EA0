@@ -27,7 +27,13 @@ bool_t m_f485 = false;
 __attribute__ ((section (".subtext"))) void modbus_set_mode(bool_t f485)
 {
     m_f485 = f485;
-    MAX3485__RE_LOW;
+    if (!m_f485) {
+        MAX3485__RE_HIGH;
+        MAX3485_DE_LOW;
+    } else {
+        MAX3485__RE_LOW;
+        MAX3485_DE_HIGH;
+    }
 }
 
 __attribute__ ((section (".subtext"))) static uint16_t get_crc(uint8_t *z_p, uint32_t z_message_length)
