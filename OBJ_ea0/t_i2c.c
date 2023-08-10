@@ -14,7 +14,7 @@
 #include "t_i2c.h"
 
 
-static void dis_int_i2c(I2C_HandleTypeDef* i2c)
+static __attribute__ ((section (".subtext"))) void dis_int_i2c(I2C_HandleTypeDef* i2c)
 {
     USCI_B_I2C_disableInterrupt(
             i2c->reg,
@@ -26,7 +26,7 @@ static void dis_int_i2c(I2C_HandleTypeDef* i2c)
     );
 }
 
-static void ena_int_i2c(I2C_HandleTypeDef* i2c)
+static __attribute__ ((section (".subtext"))) void ena_int_i2c(I2C_HandleTypeDef* i2c)
 {
     USCI_B_I2C_enableInterrupt(
             i2c->reg,
@@ -66,7 +66,7 @@ void i2c_isr(I2C_HandleTypeDef* i2c)
     }
 }
 
-ER ini_i2c(I2C_HandleTypeDef* i2c)
+ER __attribute__ ((section (".subtext"))) ini_i2c(I2C_HandleTypeDef* i2c)
 {
     USCI_B_I2C_initMasterParam I2C_param = {0};
 
@@ -86,7 +86,7 @@ ER ini_i2c(I2C_HandleTypeDef* i2c)
     return E_OK;
 }
 
-void ext_i2c(I2C_HandleTypeDef* i2c)
+void __attribute__ ((section (".subtext"))) ext_i2c(I2C_HandleTypeDef* i2c)
 {
     dis_int_i2c(i2c);
 
@@ -94,7 +94,7 @@ void ext_i2c(I2C_HandleTypeDef* i2c)
 }
 
 
-ER wrt_i2c(I2C_HandleTypeDef* i2c, uint8_t adr, uint8_t* data, uint32_t len, TMO tmout)
+ER __attribute__ ((section (".subtext"))) wrt_i2c(I2C_HandleTypeDef* i2c, uint8_t adr, uint8_t* data, uint32_t len, TMO tmout)
 {
     ER ercd;
     ER_UINT wupcnt;

@@ -127,36 +127,34 @@ const uint8_t drum_float[] = {
 
 #define MAX_RECORD  80
 
-REG_RECORD  g_table[MAX_RECORD];
-DSP_MODE g_dsp = Signed;
-OPT_MODE g_opt = Address;
-MNU_ITEM g_itm = Exit;
-int g_current = 0;
-int g_records = 0;
-ER g_err = E_OK;
-int g_hold = 0;
-
 ADC_HandleTypeDef adc;
 I2C_HandleTypeDef i2c;
 UART_HandleTypeDef uart;
 
-static uint8_t m_buf[32];
-static uint8_t m_row = 0;
-static uint8_t m_row_b;
-static MNU_ITEM_TIMER m_timer = Never;
-static MNU_ITEM_TIMER m_timer_b;
-static uint16_t m_id = 1;
-//static uint16_t m_id_b;
-static MNU_ITEM_WIRING m_wiring = RS232C;
-static MNU_ITEM_WIRING m_wiring_b;
+REG_RECORD  g_table[MAX_RECORD];
+int g_current = 0;
+ER g_err = E_OK;
+uint8_t g_row = 0;
+DSP_MODE g_dsp = Signed;
+int g_hold = 0;
+uint16_t g_id = 1;
+uint8_t g_buf[32];
+
+static int m_records = 0;
 static MNU_ITEM_BAUDRATE m_baudrate = _9600;
-static MNU_ITEM_BAUDRATE m_baudrate_b;
-//static MNU_ITEM_DATABIT m_databit = _8;
-//static MNU_ITEM_DATABIT m_databit_b;
 static MNU_ITEM_PARITY m_parity = None;
-static MNU_ITEM_PARITY m_parity_b;
 static MNU_ITEM_STOPBIT m_stopbit = _1;
+static OPT_MODE m_opt = Address;
+static MNU_ITEM m_itm = Exit;
+static MNU_ITEM_TIMER m_timer_b;
+static MNU_ITEM_WIRING m_wiring_b;
+static MNU_ITEM_BAUDRATE m_baudrate_b;
+static MNU_ITEM_PARITY m_parity_b;
 static MNU_ITEM_STOPBIT m_stopbit_b;
+static MNU_ITEM_TIMER m_timer = _10Min;
+static MNU_ITEM_WIRING m_wiring = RS232C;
+static uint8_t m_row_b;
+static float mVperUnit = (3300.0 / 4096.0);
 
 /**
   * @brief  Retargets the C library printf function to the USART.
@@ -496,7 +494,7 @@ __attribute__ ((section (".subtext"))) static void draw_view(uint8_t* pAdr)
     uint8_t buf[32];
 
     if (pAdr != NULL) {
-        sprintf((char*)idx, "[%02d/%02d]", g_current + 1, g_records);
+        sprintf((char*)idx, "[%02d/%02d]", g_current + 1, m_records);
         sprintf((char*)buf, "R:%s  %s", pAdr, idx);
         lcd_draw_text(0, (uint8_t*)buf);
     }
@@ -667,7 +665,7 @@ __attribute__ ((section (".subtext"))) static void disp_error(void)
         lcd_draw_text(1, (uint8_t*)"<Comm. Timeout> ");
         break;
     }
-    lcd_set_cursor(m_row, 0, true, false);
+    lcd_set_cursor(g_row, 0, true, false);
 }
 
 __attribute__ ((section (".subtext"))) static void get_formatted(uint8_t* value)
@@ -698,6 +696,8 @@ __attribute__ ((section (".subtext"))) static void get_formatted(uint8_t* value)
 
 __attribute__ ((section (".subtext"))) static void suspend(void)
 {
+    //stp_adc(&adc);
+
     wai_sem(SEM_DRW);
 
     lcd_suspend();
@@ -711,6 +711,9 @@ __attribute__ ((section (".subtext"))) static void suspend(void)
             GPIO_PIN0 + GPIO_PIN2 + GPIO_PIN4 + GPIO_PIN5 + GPIO_PIN6
     );
     lcd_resume();
+
+    //if ((m_opt == Setup) || (m_opt == Edit))
+    //    sta_adc(&adc);
 
     sig_sem(SEM_DRW);
 }
@@ -778,7 +781,6 @@ __attribute__ ((section (".subtext"))) static void setup_serial(void)
  *  printf()やsprintf()で「%f」や「%g」を使用する場合は
  *  リンカのオプションとして「-u _printf_float」を追記すること
  */
-//static uint8_t m_buf[32];
 __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
 {
     int i;
@@ -786,21 +788,23 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
     uint8_t dgt = 0;
     FLGPTN sw = 0x83FF;
     FLGPTN p_flgptn;
-    int timer;
+    int count_timer = 0;
     bool_t cancel;
     uint16_t top;
     uint8_t val[32];
-    uint8_t id[32];
     MODBUS_FUNC fnc;
     uint16_t crr;
     int num;
     long ltmp;
+    uint16_t reg[4];
     float ftmp;
     double dtmp;
-    uint16_t reg[4];
     bool_t sus = false;
+    uint16_t tmp;
+    uint8_t bat[32];
     int count_blink = 0;
-    int count_timer = 0;
+    uint8_t id[32];
+    int timer;
 
     main_init();
 
@@ -826,27 +830,30 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                 //
             } else
             if (p_flgptn & EVENT_ESC_ON) {
-                switch (g_opt) {
+                switch (m_opt) {
                 case Address:
                     if (get_records() == 0)
                         break;
-                    if (g_current == 0)
+                    if (g_current == 0) {
                         g_current = get_records() - 1;
-                    else
+                        g_row = 0;
+                    } else {
                         g_current--;
-                    g_opt = View;
+                        g_row = 1;
+                    }
+                    m_opt = View;
                     sprintf((char*)adr, "%05u", g_table[g_current].address);
                     draw_view(adr);
-                    m_row = 1;
-                    lcd_set_cursor(m_row, 0, true, false);
+//                    g_row = 0;
+                    lcd_set_cursor(g_row, 0, true, false);
                     sig_sem(SEM_POL);
                     break;
                 case Value:
-                    g_opt = View;
+                    m_opt = View;
                     sprintf((char*)adr, "%05u", g_table[g_current].address);
                     draw_view(adr);
-                    m_row = 1;
-                    lcd_set_cursor(m_row, 0, true, false);
+                    g_row = 1;
+                    lcd_set_cursor(g_row, 0, true, false);
                     sig_sem(SEM_POL);
                     break;
                 case View:
@@ -854,9 +861,9 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                     break;
                 //case Edit:
                 default:
-                    g_opt = Setup;
-                    m_row = 1;
-                    lcd_set_cursor(m_row, 0, true, false);
+                    m_opt = Setup;
+                    g_row = 1;
+                    lcd_set_cursor(g_row, 0, true, false);
                     break;
                 }
             } else
@@ -864,7 +871,7 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                 //
             } else
             if (p_flgptn & EVENT_SHF_ON) {
-                switch (g_opt) {
+                switch (m_opt) {
                 case Address:
                     dgt++;
                     if (dgt == 5)
@@ -926,7 +933,7 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                     break;
                 //case Edit:
                 default:
-                    if (g_itm == TargetID) {
+                    if (m_itm == TargetID) {
                         dgt++;
                         if (dgt == get_digits(Unsigned))
                             dgt = 0;
@@ -939,7 +946,7 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                 //
             } else
             if (p_flgptn & EVENT_UP__ON) {
-                switch (g_opt) {
+                switch (m_opt) {
                 case Address:
                     adr[dgt] = get_next_drum(Unsigned, adr, dgt, adr[dgt]);
                     draw_view(adr);
@@ -963,10 +970,10 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                     lcd_set_cursor(1, dgt, false, true);
                     break;
                 case View:
-                    if (m_row == 1) {
+                    if (g_row == 1) {
                         wai_sem(SEM_DRW);
-                        m_row = 0;
-                        lcd_set_cursor(m_row, 0, true, false);
+                        g_row = 0;
+                        lcd_set_cursor(g_row, 0, true, false);
                         sig_sem(SEM_DRW);
                     } else {
                         if (g_err == E_TMOUT)
@@ -979,28 +986,28 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                             g_current--;
                         sprintf((char*)adr, "%05u", g_table[g_current].address);
                         draw_view(adr);
-                        m_row = 1;
-                        lcd_set_cursor(m_row, 0, true, false);
+                        g_row = 1;
+                        lcd_set_cursor(g_row, 0, true, false);
                         sig_sem(SEM_POL);
                     }
                     break;
                 case Setup:
-                    if (m_row == 1) {
-                        m_row = 0;
-                        lcd_set_cursor(m_row, 0, true, false);
+                    if (g_row == 1) {
+                        g_row = 0;
+                        lcd_set_cursor(g_row, 0, true, false);
                     } else {
-                        if (g_itm == Exit)
-                            g_itm = Version;
+                        if (m_itm == Exit)
+                            m_itm = Version;
                         else
-                            g_itm--;
-                        draw_item(g_itm);
-                        m_row = 1;
-                        lcd_set_cursor(m_row, 0, true, false);
+                            m_itm--;
+                        draw_item(m_itm);
+                        g_row = 1;
+                        lcd_set_cursor(g_row, 0, true, false);
                     }
                     break;
                 //case Edit:
                 default:
-                    switch (g_itm) {
+                    switch (m_itm) {
                     case Timer:
                         if (m_timer_b == _10Min)
                             m_timer_b = Never;
@@ -1066,7 +1073,7 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                 //
             } else
             if (p_flgptn & EVENT_DWN_ON) {
-                switch (g_opt) {
+                switch (m_opt) {
                 case Address:
                     adr[dgt] = get_back_drum(Unsigned, adr, dgt, adr[dgt]);
                     draw_view(adr);
@@ -1090,10 +1097,10 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                     lcd_set_cursor(1, dgt, false, true);
                     break;
                 case View:
-                    if (m_row == 0) {
+                    if (g_row == 0) {
                         wai_sem(SEM_DRW);
-                        m_row = 1;
-                        lcd_set_cursor(m_row, 0, true, false);
+                        g_row = 1;
+                        lcd_set_cursor(g_row, 0, true, false);
                         sig_sem(SEM_DRW);
                     } else {
                         if (g_err == E_TMOUT)
@@ -1105,39 +1112,39 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                         else
                             g_current++;
                         if (!g_table[g_current].registered) {
-                            g_opt = Address;
+                            m_opt = Address;
                             lcd_clear();
                             dgt = 0;
                             sprintf((char*)adr, "%05u", g_table[g_current].address);
                             draw_view(adr);
-                            m_row = 0;
-                            lcd_set_cursor(m_row, (2 + dgt), false, true);
+                            g_row = 0;
+                            lcd_set_cursor(g_row, (2 + dgt), false, true);
                         } else {
                             sprintf((char*)adr, "%05u", g_table[g_current].address);
                             draw_view(adr);
-                            m_row = 0;
-                            lcd_set_cursor(m_row, 0, true, false);
+                            g_row = 0;
+                            lcd_set_cursor(g_row, 0, true, false);
                             sig_sem(SEM_POL);
                         }
                     }
                     break;
                 case Setup:
-                    if (m_row == 0) {
-                        m_row = 1;
-                        lcd_set_cursor(m_row, 0, true, false);
+                    if (g_row == 0) {
+                        g_row = 1;
+                        lcd_set_cursor(g_row, 0, true, false);
                     } else {
-                        if (g_itm == Version)
-                            g_itm = Exit;
+                        if (m_itm == Version)
+                            m_itm = Exit;
                         else
-                            g_itm++;
-                        draw_item(g_itm);
-                        m_row = 0;
-                        lcd_set_cursor(m_row, 0, true, false);
+                            m_itm++;
+                        draw_item(m_itm);
+                        g_row = 0;
+                        lcd_set_cursor(g_row, 0, true, false);
                     }
                     break;
                 //case Edit:
                 default:
-                    switch (g_itm) {
+                    switch (m_itm) {
                     case Timer:
                         if (m_timer_b == Never)
                             m_timer_b = _10Min;
@@ -1203,15 +1210,15 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                 //
             } else
             if (p_flgptn & EVENT_ENT_ON) {
-                switch (g_opt) {
+                switch (m_opt) {
                 case Address:
                     g_table[g_current].address = strtoul((const char*)adr, NULL, 10);
                     g_table[g_current].registered = true;
-                    g_records = get_records();
-                    g_opt = View;
+                    m_records = get_records();
+                    m_opt = View;
                     sprintf((char*)adr, "%05u", g_table[g_current].address);
                     draw_view(adr);
-                    lcd_set_cursor(m_row, 0, true, false);
+                    lcd_set_cursor(g_row, 0, true, false);
                     sig_sem(SEM_POL);
                     break;
                 case Value:
@@ -1232,7 +1239,7 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                             g_table[g_current].data[0] = 0xFF00;
                         g_err = modbus_write_status(
                                 fnc,
-                                m_id,
+                                g_id,
                                 (g_table[g_current].address - crr),
                                 1,
                                 (uint8_t*)&g_table[g_current].data[0],
@@ -1312,7 +1319,7 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                         }
                         g_err = modbus_write_register(
                                 fnc,
-                                m_id,
+                                g_id,
                                 (g_table[g_current].address - crr),
                                 num,
                                 &g_table[g_current].data[0],
@@ -1325,25 +1332,25 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                         dly_tsk(1000);
                     }
                     dly_tsk(10);
-                    g_opt = View;
+                    m_opt = View;
                     sprintf((char*)adr, "%05u", g_table[g_current].address);
                     draw_view(adr);
-                    lcd_set_cursor(m_row, 0, true, false);
+                    lcd_set_cursor(g_row, 0, true, false);
                     sig_sem(SEM_POL);
                     break;
                 case View:
                     if (g_err == E_TMOUT)
                         rel_wai(TSK_POL);
                     wai_sem(SEM_POL);
-                    if (m_row == 0) {
-                        g_opt = Address;
+                    if (g_row == 0) {
+                        m_opt = Address;
                         lcd_clear();
                         dgt = 0;
                         sprintf((char*)adr, "%05u", g_table[g_current].address);
                         draw_view(adr);
                         lcd_set_cursor(0, (2 + dgt), false, true);
                     } else {
-                        g_opt = Value;
+                        m_opt = Value;
                         lcd_clear();
                         dgt = 0;
                         sprintf((char*)adr, "%05u", g_table[g_current].address);
@@ -1362,13 +1369,13 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                             case Binary:
                             case Long:
                             case Long_Inverse:
-                                strcpy((char*)val, (const char*)m_buf);
+                                strcpy((char*)val, (const char*)g_buf);
                                 break;
                             case Float:
                             case Float_Inverse:
                             case Double:
                             case Double_Inverse:
-                                strcpy((char*)val, (const char*)m_buf);
+                                strcpy((char*)val, (const char*)g_buf);
                                 if ((strchr((const char*)val, (int)'e') != NULL) ||
                                     (strchr((const char*)val, (int)'n') != NULL)) {
                                     val[0] = (uint8_t)'+';
@@ -1381,7 +1388,7 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                                 break;
                             //case Signed:
                             default:
-                                strcpy((char*)val, (const char*)m_buf);
+                                strcpy((char*)val, (const char*)g_buf);
                                 break;
                             }
                             break;
@@ -1392,72 +1399,74 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                     }
                     break;
                 case Setup:
-                    if ((g_itm == Battery) || (g_itm == Version))
+                    if ((m_itm == Battery) || (m_itm == Version))
                         break;
-                    g_opt = Edit;
+                    m_opt = Edit;
                     m_timer_b = m_timer;
-                    //strcpy((char*)val, (const char*)m_buf);
-                    sprintf((char*)val, "%05u", m_id);
+                    //strcpy((char*)val, (const char*)g_buf);
+                    sprintf((char*)val, "%05u", g_id);
                     m_wiring_b = m_wiring;
                     m_baudrate_b = m_baudrate;
                     //m_databit_b = m_databit;
                     m_parity_b = m_parity;
                     m_stopbit_b = m_stopbit;
-                    if (g_itm == TargetID) {
+                    if (m_itm == TargetID) {
                         lcd_clear();
                         dgt = 0;
-                        draw_item(g_itm);
+                        draw_item(m_itm);
                         lcd_draw_text(1, (uint8_t*)val);
-                        m_row = 1;
-                        lcd_set_cursor(m_row, dgt, false, true);
+                        g_row = 1;
+                        lcd_set_cursor(g_row, dgt, false, true);
                     } else {
-                        draw_item(g_itm);
-                        m_row = 1;
-                        lcd_set_cursor(m_row, 0, false, true);
+                        draw_item(m_itm);
+                        g_row = 1;
+                        lcd_set_cursor(g_row, 0, false, true);
                     }
                     break;
                 //case Edit:
                 default:
-                    if (g_itm == Exit) {
+                    if (m_itm == Exit) {
+                        //wai_sem(SEM_BAT);
+                        stp_adc(&adc);
                         modbus_set_mode((m_wiring == RS485));
                         setup_serial();
                         if (!g_table[g_current].registered) {
-                            g_opt = Address;
+                            m_opt = Address;
                             lcd_clear();
                             dgt = 0;
                             sprintf((char*)adr, "%05u", g_table[g_current].address);
                             draw_view(adr);
-                            m_row = 0;
-                            lcd_set_cursor(m_row, (2 + dgt), false, true);
+                            g_row = 0;
+                            lcd_set_cursor(g_row, (2 + dgt), false, true);
                         } else {
-                            g_opt = View;
+                            m_opt = View;
                             lcd_clear();
                             sprintf((char*)adr, "%05u", g_table[g_current].address);
                             draw_view(adr);
-                            m_row = m_row_b;
-                            lcd_set_cursor(m_row, 0, true, false);
+                            g_row = m_row_b;
+                            lcd_set_cursor(g_row, 0, true, false);
                             sig_sem(SEM_POL);
                         }
                         break;
                     }
-                    if (g_itm == Suspend) {
+                    if (m_itm == Suspend) {
                         sus = true;
                     }
-                    g_opt = Setup;
+                    m_opt = Setup;
                     m_timer = m_timer_b;
-                    m_id = (uint16_t)strtoul((const char*)val, NULL, 10);
+                    g_id = (uint16_t)strtoul((const char*)val, NULL, 10);
                     m_wiring = m_wiring_b;
                     m_baudrate = m_baudrate_b;
                     //m_databit = m_databit_b;
                     m_parity = m_parity_b;
                     m_stopbit = m_stopbit_b;
-                    lcd_set_cursor(m_row, 0, true, false);
+                    lcd_set_cursor(g_row, 0, true, false);
                     break;
                 }
             } else
             if (p_flgptn & EVENT_MNU) {
-                if ((g_opt != Setup) && (g_opt != Edit)) {
-                    if (g_opt == View) {
+                if ((m_opt != Setup) && (m_opt != Edit)) {
+                    if (m_opt == View) {
                         if (g_err == E_TMOUT)
                             rel_wai(TSK_POL);
                         wai_sem(SEM_POL);
@@ -1465,38 +1474,42 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                     lcd_clear();
                     lcd_draw_text(0, (uint8_t*)"  <Setup Menu>  ");
                     dly_tsk(1000);
-                    g_opt = Setup;
-                    g_itm = Exit;
-                    draw_item(g_itm);
-                    m_row_b = m_row;
-                    m_row = 0;
-                    lcd_set_cursor(m_row, 0, true, false);
+                    m_opt = Setup;
+                    m_itm = Exit;
+                    draw_item(m_itm);
+                    m_row_b = g_row;
+                    g_row = 0;
+                    lcd_set_cursor(g_row, 0, true, false);
+                    sta_adc(&adc);
+                    //sig_sem(SEM_BAT);
                 } else
-                if ((g_opt != Address) && (g_opt != Value) && (g_opt != View)) {
+                if ((m_opt != Address) && (m_opt != Value) && (m_opt != View)) {
+                    //wai_sem(SEM_BAT);
+                    stp_adc(&adc);
                     modbus_set_mode((m_wiring == RS485));
                     setup_serial();
                     if (!g_table[g_current].registered) {
-                        g_opt = Address;
+                        m_opt = Address;
                         lcd_clear();
                         dgt = 0;
                         sprintf((char*)adr, "%05u", g_table[g_current].address);
                         draw_view(adr);
-                        m_row = 0;
-                        lcd_set_cursor(m_row, (2 + dgt), false, true);
+                        g_row = 0;
+                        lcd_set_cursor(g_row, (2 + dgt), false, true);
                     } else {
-                        g_opt = View;
+                        m_opt = View;
                         lcd_clear();
                         sprintf((char*)adr, "%05u", g_table[g_current].address);
                         draw_view(adr);
-                        m_row = m_row_b;
-                        lcd_set_cursor(m_row, 0, true, false);
+                        g_row = m_row_b;
+                        lcd_set_cursor(g_row, 0, true, false);
                         sig_sem(SEM_POL);
                     }
                 }
             }
         }
 
-        if (g_opt == View) {
+        if (m_opt == View) {
             if (g_err != E_OK) {
                 if (count_blink == 0) {
                     wai_sem(SEM_DRW);
@@ -1508,16 +1521,16 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                     wai_sem(SEM_DRW);
                     if (g_hold == 0) {
                         lcd_draw_text(1, (uint8_t*)"                ");
-                        lcd_set_cursor(m_row, 0, true, false);
+                        lcd_set_cursor(g_row, 0, true, false);
                     }
                     sig_sem(SEM_DRW);
                 }
             }
         }
 
-        if (g_opt == Setup) {
-            lcd_set_cursor(m_row, 0, false, false);
-            switch (g_itm) {
+        if (m_opt == Setup) {
+            lcd_set_cursor(g_row, 0, false, false);
+            switch (m_itm) {
             case Exit:
             case Suspend:
                 lcd_draw_text(1, (uint8_t*)">               ");
@@ -1526,8 +1539,8 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                 draw_item_timer(m_timer);
                 break;
             case TargetID:
-                sprintf((char*)id, "%u", m_id);
-                //sprintf((char*)m_buf, "%05u", m_id);
+                sprintf((char*)id, "%u", g_id);
+                //sprintf((char*)g_buf, "%05u", g_id);
                 lcd_draw_text(1, id);
                 break;
             case Wiring:
@@ -1546,40 +1559,57 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                 draw_item_stopbit(m_stopbit);
                 break;
             case Battery:
-                lcd_draw_text(1, (uint8_t*)"100%            ");
+                if (E_OK == get_adc(&adc, &tmp, 10)) {
+                    ftmp = (float)tmp * mVperUnit;
+                    ftmp *= 2.0;
+                    if (ftmp > 2800.0) {
+                        tmp = 100;
+                    } else
+                    if (ftmp < 1800.0) {
+                        tmp = 0;
+                    } else {
+                        ftmp -= 1800.0;
+                        ftmp /= 1000;
+                        tmp = (uint16_t)(ftmp * 100.0);
+                    }
+                    sprintf((char*)bat, "%u%%", tmp);
+                    lcd_draw_text(1, (uint8_t*)bat);
+                }
                 break;
             //case Version:
             default:
-                lcd_draw_text(1, (uint8_t*)"01.00.00.00     ");
+                lcd_draw_text(1, (uint8_t*)"01.00.00.00");
                 break;
             }
-            lcd_set_cursor(m_row, 0, true, false);
+            lcd_set_cursor(g_row, 0, true, false);
         }
 
         count_blink++;
         if (count_blink == 10)
             count_blink = 0;
-        count_timer++;
-        switch (m_timer) {
-        case _1Min:
-            timer = 600;
-            break;
-        case _3Min:
-            timer = 1800;
-            break;
-        case _5Min:
-            timer = 3000;
-            break;
-        case _10Min:
-            timer = 6000;
-            break;
-        default:
-            timer = -1;
-            break;
-        }
-        if ((timer > 0) && (count_timer == timer)) {
-            suspend();
-            cancel = true;
+        if ((m_opt != Setup) && (m_opt != Edit)) {
+            count_timer++;
+            switch (m_timer) {
+            case _1Min:
+                timer = 600;
+                break;
+            case _3Min:
+                timer = 1800;
+                break;
+            case _5Min:
+                timer = 3000;
+                break;
+            case _10Min:
+                timer = 6000;
+                break;
+            default:
+                timer = -1;
+                break;
+            }
+            if ((timer > 0) && (count_timer == timer)) {
+                suspend();
+                cancel = true;
+            }
         }
         if (sus) {
             sus = false;
@@ -1594,17 +1624,17 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
 __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
 {
     uint16_t top;
-    uint16_t top_b = 0xFFFFU;
     MODBUS_FUNC fnc;
     uint16_t crr;
+    uint16_t top_b = 0xFFFFU;
     uint8_t buf[32];
     DSP_MODE dsp_b = -1;
     int num;
     int i;
     long ltmp;
+    uint16_t reg[4];
     float ftmp;
     double dtmp;
-    uint16_t reg[4];
 
     while (1) {
         wai_sem(SEM_POL);
@@ -1621,11 +1651,11 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
             }
             if (top != top_b) {
                 top_b = top;
-                sprintf((char*)m_buf, "%u", false);
+                sprintf((char*)g_buf, "%u", false);
             }
             g_err = modbus_read_status(
                     fnc,
-                    m_id,
+                    g_id,
                     (g_table[g_current].address - crr),
                     1,
                     (uint8_t*)&g_table[g_current].data[0],
@@ -1634,12 +1664,12 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
             if (g_err != E_OK)
                 break;
             sprintf((char*)buf, "%u", (g_table[g_current].data[0] & 0x0001U));
-            sprintf((char*)m_buf, "%u", (g_table[g_current].data[0] & 0x0001U));
+            sprintf((char*)g_buf, "%u", (g_table[g_current].data[0] & 0x0001U));
             wai_sem(SEM_DRW);
             if (g_hold == 0) {
-                lcd_set_cursor(m_row, 0, false, false);
+                lcd_set_cursor(g_row, 0, false, false);
                 lcd_draw_text(1, (uint8_t*)buf);
-                lcd_set_cursor(m_row, 0, true, false);
+                lcd_set_cursor(g_row, 0, true, false);
             }
             sig_sem(SEM_DRW);
             break;
@@ -1658,7 +1688,7 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
                 if ((top != top_b) || (g_dsp != dsp_b)) {
                     top_b = top;
                     dsp_b = g_dsp;
-                    sprintf((char*)m_buf, "%05u", 0);
+                    sprintf((char*)g_buf, "%05u", 0);
                 }
                 num = 1;
                 break;
@@ -1666,7 +1696,7 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
                 if ((top != top_b) || (g_dsp != dsp_b)) {
                     top_b = top;
                     dsp_b = g_dsp;
-                    sprintf((char*)m_buf, "%04X", 0);
+                    sprintf((char*)g_buf, "%04X", 0);
                 }
                 num = 1;
                 break;
@@ -1675,8 +1705,8 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
                     top_b = top;
                     dsp_b = g_dsp;
                     for (i = 0; i < 16; i++)
-                            m_buf[i] = (uint8_t)'0';
-                    m_buf[i] = 0;
+                            g_buf[i] = (uint8_t)'0';
+                    g_buf[i] = 0;
                 }
                 num = 1;
                 break;
@@ -1685,7 +1715,7 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
                 if ((top != top_b) || (g_dsp != dsp_b)) {
                     top_b = top;
                     dsp_b = g_dsp;
-                    sprintf((char*)m_buf, "%+011ld", (long)0);
+                    sprintf((char*)g_buf, "%+011ld", (long)0);
                 }
                 num = 2;
                 break;
@@ -1694,7 +1724,7 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
                 if ((top != top_b) || (g_dsp != dsp_b)) {
                     top_b = top;
                     dsp_b = g_dsp;
-                    sprintf((char*)m_buf, "%+f", 0.0);
+                    sprintf((char*)g_buf, "%+f", 0.0);
                 }
                 num = 2;
                 break;
@@ -1703,7 +1733,7 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
                 if ((top != top_b) || (g_dsp != dsp_b)) {
                     top_b = top;
                     dsp_b = g_dsp;
-                    sprintf((char*)m_buf, "%+f", 0.0);
+                    sprintf((char*)g_buf, "%+f", 0.0);
                 }
                 num = 4;
                 break;
@@ -1712,14 +1742,14 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
                 if ((top != top_b) || (g_dsp != dsp_b)) {
                     top_b = top;
                     dsp_b = g_dsp;
-                    sprintf((char*)m_buf, "%+06d", 0);
+                    sprintf((char*)g_buf, "%+06d", 0);
                 }
                 num = 1;
                 break;
             }
             g_err = modbus_read_register(
                     fnc,
-                    m_id,
+                    g_id,
                     (g_table[g_current].address - crr),
                     num,
                     &g_table[g_current].data[0],
@@ -1730,40 +1760,40 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
             switch (g_dsp) {
             case Unsigned:
                 sprintf((char*)buf, "%u", g_table[g_current].data[0]);
-                sprintf((char*)m_buf, "%05u", g_table[g_current].data[0]);
+                sprintf((char*)g_buf, "%05u", g_table[g_current].data[0]);
                 break;
             case Hex:
                 sprintf((char*)buf, "%X", g_table[g_current].data[0]);
-                sprintf((char*)m_buf, "%04X", g_table[g_current].data[0]);
+                sprintf((char*)g_buf, "%04X", g_table[g_current].data[0]);
                 break;
             case Binary:
                 for (i = 0; i < 16; i++) {
                     if (g_table[g_current].data[0] & (0x8000 >> i)) {
-                        m_buf[i] = buf[i] = (uint8_t)'1';
+                        g_buf[i] = buf[i] = (uint8_t)'1';
                     } else {
-                        m_buf[i] = buf[i] = (uint8_t)'0';
+                        g_buf[i] = buf[i] = (uint8_t)'0';
                     }
                 }
-                m_buf[i] = buf[16] = 0;
+                g_buf[i] = buf[16] = 0;
                 break;
             case Long:
                 memcpy(&ltmp, &g_table[g_current].data[0], sizeof(long));
                 sprintf((char*)buf, "%ld", ltmp);
-                sprintf((char*)m_buf, "%+011ld", ltmp);
+                sprintf((char*)g_buf, "%+011ld", ltmp);
                break;
             case Long_Inverse:
                 reg[1] = g_table[g_current].data[0];
                 reg[0] = g_table[g_current].data[1];
                 memcpy(&ltmp, &reg[0], sizeof(long));
                 sprintf((char*)buf, "%ld", ltmp);
-                sprintf((char*)m_buf, "%+011ld", ltmp);
+                sprintf((char*)g_buf, "%+011ld", ltmp);
                 break;
             case Float:
                 memcpy(&ftmp, &g_table[g_current].data[0], sizeof(float));
                 if (snprintf((char*)buf, 17, "%.6f", ftmp) > 15)
                     strcpy((char*)buf, "<Overflowed>    ");
-                if (snprintf((char*)m_buf, 17, "%+f", ftmp) > 16)
-                    sprintf((char*)m_buf, "%+f", 0.0);
+                if (snprintf((char*)g_buf, 17, "%+f", ftmp) > 16)
+                    sprintf((char*)g_buf, "%+f", 0.0);
                break;
             case Float_Inverse:
                 reg[1] = g_table[g_current].data[0];
@@ -1771,15 +1801,15 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
                 memcpy(&ftmp, &reg[0], sizeof(float));
                 if (snprintf((char*)buf, 17, "%.6f", ftmp) > 15)
                     strcpy((char*)buf, "<Overflowed>    ");
-                if (snprintf((char*)m_buf, 17, "%+f", ftmp) > 16)
-                    sprintf((char*)m_buf, "%+f", 0.0);
+                if (snprintf((char*)g_buf, 17, "%+f", ftmp) > 16)
+                    sprintf((char*)g_buf, "%+f", 0.0);
                 break;
             case Double:
                 memcpy(&dtmp, &g_table[g_current].data[0], sizeof(double));
                 if (snprintf((char*)buf, 17, "%.6f", (float)dtmp) > 15)
                     strcpy((char*)buf, "<Overflowed>    ");
-                if (snprintf((char*)m_buf, 17, "%+f", (float)dtmp) > 16)
-                    sprintf((char*)m_buf, "%+f", 0.0);
+                if (snprintf((char*)g_buf, 17, "%+f", (float)dtmp) > 16)
+                    sprintf((char*)g_buf, "%+f", 0.0);
                 break;
             case Double_Inverse:
                 reg[3] = g_table[g_current].data[0];
@@ -1789,20 +1819,20 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
                 memcpy(&dtmp, &reg[0], sizeof(double));
                 if (snprintf((char*)buf, 17, "%.6f", (float)dtmp) > 15)
                     strcpy((char*)buf, "<Overflowed>    ");
-                if (snprintf((char*)m_buf, 17, "%+f", (float)dtmp) > 16)
-                    sprintf((char*)m_buf, "%+f", 0.0);
+                if (snprintf((char*)g_buf, 17, "%+f", (float)dtmp) > 16)
+                    sprintf((char*)g_buf, "%+f", 0.0);
                 break;
             //case Signed:
             default:
                 sprintf((char*)buf, "%d", g_table[g_current].data[0]);
-                sprintf((char*)m_buf, "%+06d", g_table[g_current].data[0]);
+                sprintf((char*)g_buf, "%+06d", g_table[g_current].data[0]);
                break;
             }
             wai_sem(SEM_DRW);
             if (g_hold == 0) {
-                lcd_set_cursor(m_row, 0, false, false);
+                lcd_set_cursor(g_row, 0, false, false);
                 lcd_draw_text(1, (uint8_t*)buf);
-                lcd_set_cursor(m_row, 0, true, false);
+                lcd_set_cursor(g_row, 0, true, false);
             }
             sig_sem(SEM_DRW);
             break;
@@ -1810,232 +1840,3 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
         sig_sem(SEM_POL);
     }
 }
-
-#if 0
-void main_task(intptr_t exinf)
-{
-    uint8_t buf[32];
-    float tmp = 1.23456;
-    uint8_t* p;
-    int i;
-    uint8_t c;
-    uint16_t val;
-    int bytes;
-    uint16_t reg[4];
-    uint8_t sts[4];
-    int len;
-    ER ret;
-    FLGPTN p_flgptn;
-    FLGPTN sw = 0xFFFF;
-
-    main_init();
-
-    //modbus_set_mode(true);
-
-    sprintf((char*)buf, "sprintf() Test = %g\r\n", tmp);
-//#if 0
-    p = &buf[0];
-    for (i = 0; i < strlen((const char*)buf); i++) {
-        put_sio(&uart, *p, 10);
-        p++;
-    }
-//#endif
-#if 0
-    c = 'T';
-    while (1) {
-        GPIO_setOutputHighOnPin(GPIO_PORT_P3, GPIO_PIN7);   // DE High
-        put_sio(&uart, c, 10);
-        if (E_OK == get_sio(&uart, &c, 1000)) {
-            if (c == 'T')
-                lcd_draw_text(0, (uint8_t*)"OK!");
-            else
-                lcd_draw_text(0, (uint8_t*)"NG!");
-        } else {
-            lcd_draw_text(0, (uint8_t*)"NG!");
-        }
-        GPIO_setOutputLowOnPin(GPIO_PORT_P3, GPIO_PIN7);    // DE Low
-        dly_tsk(500);
-        lcd_clear();
-        dly_tsk(500);
-    }
-#endif
-
-    // Display
-    //lcd_draw_text(0, (uint8_t*)"0123456789ABCDEF");
-    //lcd_set_cursor(1, 0, false, true);
-
-    //sta_adc(&adc);
-    //dly_tsk(10);
-
-    //__bis_SR_register(LPM4_bits + GIE);
-
-    while (1) {
-        if (E_TMOUT != twai_flg(FLG_INP, sw, TWF_ORW, &p_flgptn, 100)) {
-            if (p_flgptn & EVENT_ESC_OFF) {
-                strcpy((char*)buf, "RED : High\r\n");
-            } else
-            if (p_flgptn & EVENT_ESC_ON) {
-                strcpy((char*)buf, "RED : Low\r\n");
-            } else
-            if (p_flgptn & EVENT_SHF_OFF) {
-                strcpy((char*)buf, "WHITE : High\r\n");
-            } else
-            if (p_flgptn & EVENT_SHF_ON) {
-                strcpy((char*)buf, "WHITE : Low\r\n");
-            } else
-            if (p_flgptn & EVENT_UP__OFF) {
-                strcpy((char*)buf, "YELLOW : High\r\n");
-            } else
-            if (p_flgptn & EVENT_UP__ON) {
-                strcpy((char*)buf, "YELLOW : Low\r\n");
-            } else
-            if (p_flgptn & EVENT_DWN_OFF) {
-                strcpy((char*)buf, "GREEN : High\r\n");
-            } else
-            if (p_flgptn & EVENT_DWN_ON) {
-                strcpy((char*)buf, "GREEN : Low\r\n");
-            } else
-            if (p_flgptn & EVENT_ENT_OFF) {
-                strcpy((char*)buf, "BLUE : High\r\n");
-            } else
-            if (p_flgptn & EVENT_ENT_ON) {
-                strcpy((char*)buf, "BLUE : Low\r\n");
-            } else
-            if (p_flgptn & EVENT_MNU) {
-                strcpy((char*)buf, "GOTO MENU\r\n");
-            }
-            p = &buf[0];
-            for (i = 0; i < strlen((const char*)buf); i++) {
-                put_sio(&uart, *p, 10);
-                p++;
-            }
-        }
-
-#if 0
-        if (GPIO_getInputPinValue(GPIO_PORT_P2, GPIO_PIN6) == GPIO_INPUT_PIN_HIGH)
-            sprintf((char*)buf, "RED : High\r\n");
-        else
-            sprintf((char*)buf, "RED : Low\r\n");
-        p = &buf[0];
-        for (i = 0; i < strlen((const char*)buf); i++) {
-            put_sio(&uart, *p, 10);
-            p++;
-        }
-        if (GPIO_getInputPinValue(GPIO_PORT_P2, GPIO_PIN2) == GPIO_INPUT_PIN_HIGH)
-            sprintf((char*)buf, "WHITE : High\r\n");
-        else
-            sprintf((char*)buf, "WHITE : Low\r\n");
-        p = &buf[0];
-        for (i = 0; i < strlen((const char*)buf); i++) {
-            put_sio(&uart, *p, 10);
-            p++;
-        }
-        if (GPIO_getInputPinValue(GPIO_PORT_P2, GPIO_PIN4) == GPIO_INPUT_PIN_HIGH)
-            sprintf((char*)buf, "YELLOW : High\r\n");
-        else
-            sprintf((char*)buf, "YELLOW : Low\r\n");
-        p = &buf[0];
-        for (i = 0; i < strlen((const char*)buf); i++) {
-            put_sio(&uart, *p, 10);
-            p++;
-        }
-        if (GPIO_getInputPinValue(GPIO_PORT_P2, GPIO_PIN0) == GPIO_INPUT_PIN_HIGH)
-            sprintf((char*)buf, "GREEN : High\r\n");
-        else
-            sprintf((char*)buf, "GREEN : Low\r\n");
-        p = &buf[0];
-        for (i = 0; i < strlen((const char*)buf); i++) {
-            put_sio(&uart, *p, 10);
-            p++;
-        }
-        if (GPIO_getInputPinValue(GPIO_PORT_P2, GPIO_PIN5) == GPIO_INPUT_PIN_HIGH)
-            sprintf((char*)buf, "BLUE : High\r\n");
-        else
-            sprintf((char*)buf, "BLUE : Low\r\n");
-        p = &buf[0];
-        for (i = 0; i < strlen((const char*)buf); i++) {
-            put_sio(&uart, *p, 10);
-            p++;
-        }
-        dly_tsk(100);
-#endif
-#if 0
-        ret = modbus_read_register(HOLDING_REGISTER, 0x0001U, 0x0000U, 2, &reg[0], 1000);
-        if (E_OK == ret) {
-            sprintf((char*)buf, "%d", reg[0]);
-            lcd_draw_text(0, buf);
-            sprintf((char*)buf, "%d", reg[1]);
-            lcd_draw_text(1, buf);
-        } else {
-            switch (ret) {
-            case E_MODBUS_BFNC:
-                sprintf((char*)buf, "Illegal Func.");
-                lcd_draw_text(0, buf);
-                break;
-            case E_MODBUS_BADR:
-                sprintf((char*)buf, "Illegal DataAdr.");
-                lcd_draw_text(0, buf);
-                break;
-            case E_MODBUS_BDAT:
-                sprintf((char*)buf, "Illegal DataVal.");
-                lcd_draw_text(0, buf);
-                break;
-            }
-        }
-#endif
-#if 0
-        if (E_OK == modbus_read_status(COIL_STATUS, 0x0001U, 0x0000U, 10, &sts[0], 1000)) {
-            sprintf((char*)buf, "%d", ((sts[0] >> 0) & 0x0001));
-            lcd_draw_text(0, buf);
-            sprintf((char*)buf, "%d", ((sts[1] >> 1) & 0x0001));
-            lcd_draw_text(1, buf);
-        }
-#endif
-#if 0
-        reg[0] = 0x1234;
-        //reg[1] = 0x5678;
-        modbus_write_register(HOLDING_REGISTER, 0x0001U, 0x0000U, 1, &reg[0], 1000);
-#endif
-#if 0
-        sts[0] = 0xAA;
-        sts[1] = 0x02;
-        ret = modbus_write_status(COIL_STATUS, 0x0001U, 0x0000U, 11, &sts[0], 1000);
-        if (E_OK == ret) {
-            //
-        } else {
-            switch (ret) {
-            case E_MODBUS_BFNC:
-                sprintf((char*)buf, "Illegal Func.");
-                lcd_draw_text(0, buf);
-                break;
-            case E_MODBUS_BADR:
-                sprintf((char*)buf, "Illegal DataAdr.");
-                lcd_draw_text(0, buf);
-                break;
-            case E_MODBUS_BDAT:
-                sprintf((char*)buf, "Illegal DataVal.");
-                lcd_draw_text(0, buf);
-                break;
-            }
-        }
-        dly_tsk(100);
-#endif
-#if 0
-        if (E_OK == get_sio(&uart, &c, 1000)) {
-            put_sio(&uart, c, 10);
-        }
-#endif
-#if 0
-//        sprintf((char*)buf, "val = %u\r\n", red_adc(&adc));
-        if (E_OK == get_adc(&adc, &val, 10))
-            sprintf((char*)buf, "val = %u\r\n", val);
-        p = &buf[0];
-        for (i = 0; i < strlen((const char*)buf); i++) {
-            put_sio(&uart, *p, 10);
-            p++;
-        }
-        dly_tsk(1000);
-#endif
-    }
-}
-#endif
