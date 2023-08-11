@@ -58,6 +58,7 @@
 
 #include "main.h"
 
+#define VERSION "01.00.00.00"
 
 #ifdef __GNUC__
   /* With GCC, small printf (option LD Linker->Libraries->Small printf
@@ -1113,7 +1114,6 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                             g_current++;
                         if (!g_table[g_current].registered) {
                             m_opt = Address;
-                            lcd_clear();
                             dgt = 0;
                             sprintf((char*)adr, "%05u", g_table[g_current].address);
                             draw_view(adr);
@@ -1342,16 +1342,15 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                     if (g_err == E_TMOUT)
                         rel_wai(TSK_POL);
                     wai_sem(SEM_POL);
+                    lcd_clear();
                     if (g_row == 0) {
                         m_opt = Address;
-                        lcd_clear();
                         dgt = 0;
                         sprintf((char*)adr, "%05u", g_table[g_current].address);
                         draw_view(adr);
                         lcd_set_cursor(0, (2 + dgt), false, true);
                     } else {
                         m_opt = Value;
-                        lcd_clear();
                         dgt = 0;
                         sprintf((char*)adr, "%05u", g_table[g_current].address);
                         top = g_table[g_current].address / 10000;
@@ -1430,9 +1429,9 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                         stp_adc(&adc);
                         modbus_set_mode((m_wiring == RS485));
                         setup_serial();
+                        lcd_clear();
                         if (!g_table[g_current].registered) {
                             m_opt = Address;
-                            lcd_clear();
                             dgt = 0;
                             sprintf((char*)adr, "%05u", g_table[g_current].address);
                             draw_view(adr);
@@ -1440,7 +1439,6 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                             lcd_set_cursor(g_row, (2 + dgt), false, true);
                         } else {
                             m_opt = View;
-                            lcd_clear();
                             sprintf((char*)adr, "%05u", g_table[g_current].address);
                             draw_view(adr);
                             g_row = m_row_b;
@@ -1488,9 +1486,9 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                     stp_adc(&adc);
                     modbus_set_mode((m_wiring == RS485));
                     setup_serial();
+                    lcd_clear();
                     if (!g_table[g_current].registered) {
                         m_opt = Address;
-                        lcd_clear();
                         dgt = 0;
                         sprintf((char*)adr, "%05u", g_table[g_current].address);
                         draw_view(adr);
@@ -1498,7 +1496,6 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                         lcd_set_cursor(g_row, (2 + dgt), false, true);
                     } else {
                         m_opt = View;
-                        lcd_clear();
                         sprintf((char*)adr, "%05u", g_table[g_current].address);
                         draw_view(adr);
                         g_row = m_row_b;
@@ -1578,7 +1575,7 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                 break;
             //case Version:
             default:
-                lcd_draw_text(1, (uint8_t*)"01.00.00.00");
+                lcd_draw_text(1, (uint8_t*)VERSION);
                 break;
             }
             lcd_set_cursor(g_row, 0, true, false);

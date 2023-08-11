@@ -245,12 +245,3 @@ x_config_int(INTNO intno, ATR intatr, PRI intpri)
 	assert(VALID_INTNO_CFGINT(intno));
 	assert(TMIN_INTPRI <= intpri && intpri <= TMAX_INTPRI);
 }
-
-static bool_t debug;
-void
-TOPPERS_assert_abort(void)
-{
-//  Asm("trap #2");
-    //while(1);
-    debug = !debug;
-}
