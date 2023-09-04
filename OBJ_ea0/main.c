@@ -491,14 +491,46 @@ __attribute__ ((section (".subtext"))) static int get_digits(DSP_MODE mode)
 
 __attribute__ ((section (".subtext"))) static void draw_view(uint8_t* pAdr)
 {
-    uint8_t idx[8];
+//    uint8_t idx[8];
     uint8_t buf[32];
 
     if (pAdr != NULL) {
-        sprintf((char*)idx, "[%02d/%02d]", g_current + 1, m_records);
-        sprintf((char*)buf, "R:%s  %s", pAdr, idx);
+        //sprintf((char*)idx, "[%02d/%02d]", g_current + 1, m_records);
+        //sprintf((char*)buf, "R:%s  %s", pAdr, idx);
+        buf[ 0] = (uint8_t)'R';
+        buf[ 1] = (uint8_t)':';
+        buf[ 2] = pAdr[0];
+        buf[ 3] = pAdr[1];
+        buf[ 4] = pAdr[2];
+        buf[ 5] = pAdr[3];
+        buf[ 6] = pAdr[4];
+        buf[ 7] = (uint8_t)' ';
+        buf[ 8] = (uint8_t)' ';
+        buf[ 9] = (uint8_t)'[';
+        buf[10] = (uint8_t)'0' + (uint8_t)(((g_current + 1) / 10) % 10);
+        buf[11] = (uint8_t)'0' + (uint8_t)(((g_current + 1) / 1) % 10);
+        buf[12] = (uint8_t)'/';
+        buf[13] = (uint8_t)'0' + (uint8_t)((m_records / 10) % 10);
+        buf[14] = (uint8_t)'0' + (uint8_t)((m_records / 1) % 10);
+        buf[15] = (uint8_t)']';
+        buf[16] = 0;
         lcd_draw_text(0, (uint8_t*)buf);
     }
+}
+
+__attribute__ ((section (".subtext"))) static void adr2s(uint8_t *pBuf, uint16_t adr)
+{
+    pBuf[0] = (uint8_t)'0' + (uint8_t)((adr / 10000) % 10);
+    pBuf[1] = (uint8_t)'0' + (uint8_t)((adr / 1000) % 10);
+    pBuf[2] = (uint8_t)'0' + (uint8_t)((adr / 100) % 10);
+    pBuf[3] = (uint8_t)'0' + (uint8_t)((adr / 10) % 10);
+    pBuf[4] = (uint8_t)'0' + (uint8_t)((adr / 1) % 10);
+    pBuf[5] = 0;
+}
+
+__attribute__ ((section (".subtext"))) static void id2s(uint8_t *pBuf, uint16_t id)
+{
+    adr2s(pBuf, id);
 }
 
 __attribute__ ((section (".subtext"))) static void draw_item(MNU_ITEM item)
@@ -814,7 +846,8 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
     for (i = 0; i < MAX_RECORD; i++)
         g_table[i].address = 1;
 
-    sprintf((char*)adr, "%05u", g_table[g_current].address);
+    //sprintf((char*)adr, "%05u", g_table[g_current].address);
+    adr2s(adr, g_table[g_current].address);
     draw_view(adr);
     lcd_set_cursor(0, (2 + dgt), false, true);
 
@@ -843,7 +876,8 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                         g_row = 1;
                     }
                     m_opt = View;
-                    sprintf((char*)adr, "%05u", g_table[g_current].address);
+                    //sprintf((char*)adr, "%05u", g_table[g_current].address);
+                    adr2s(adr, g_table[g_current].address);
                     draw_view(adr);
 //                    g_row = 0;
                     lcd_set_cursor(g_row, 0, true, false);
@@ -851,7 +885,8 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                     break;
                 case Value:
                     m_opt = View;
-                    sprintf((char*)adr, "%05u", g_table[g_current].address);
+                    //sprintf((char*)adr, "%05u", g_table[g_current].address);
+                    adr2s(adr, g_table[g_current].address);
                     draw_view(adr);
                     g_row = 1;
                     lcd_set_cursor(g_row, 0, true, false);
@@ -985,7 +1020,8 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                             g_current = get_records() - 1;
                         else
                             g_current--;
-                        sprintf((char*)adr, "%05u", g_table[g_current].address);
+                        //sprintf((char*)adr, "%05u", g_table[g_current].address);
+                        adr2s(adr, g_table[g_current].address);
                         draw_view(adr);
                         g_row = 1;
                         lcd_set_cursor(g_row, 0, true, false);
@@ -1115,12 +1151,14 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                         if (!g_table[g_current].registered) {
                             m_opt = Address;
                             dgt = 0;
-                            sprintf((char*)adr, "%05u", g_table[g_current].address);
+                            //sprintf((char*)adr, "%05u", g_table[g_current].address);
+                            adr2s(adr, g_table[g_current].address);
                             draw_view(adr);
                             g_row = 0;
                             lcd_set_cursor(g_row, (2 + dgt), false, true);
                         } else {
-                            sprintf((char*)adr, "%05u", g_table[g_current].address);
+                            //sprintf((char*)adr, "%05u", g_table[g_current].address);
+                            adr2s(adr, g_table[g_current].address);
                             draw_view(adr);
                             g_row = 0;
                             lcd_set_cursor(g_row, 0, true, false);
@@ -1216,7 +1254,8 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                     g_table[g_current].registered = true;
                     m_records = get_records();
                     m_opt = View;
-                    sprintf((char*)adr, "%05u", g_table[g_current].address);
+                    //sprintf((char*)adr, "%05u", g_table[g_current].address);
+                    adr2s(adr, g_table[g_current].address);
                     draw_view(adr);
                     lcd_set_cursor(g_row, 0, true, false);
                     sig_sem(SEM_POL);
@@ -1333,7 +1372,8 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                     }
                     dly_tsk(10);
                     m_opt = View;
-                    sprintf((char*)adr, "%05u", g_table[g_current].address);
+                    //sprintf((char*)adr, "%05u", g_table[g_current].address);
+                    adr2s(adr, g_table[g_current].address);
                     draw_view(adr);
                     lcd_set_cursor(g_row, 0, true, false);
                     sig_sem(SEM_POL);
@@ -1346,18 +1386,25 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                     if (g_row == 0) {
                         m_opt = Address;
                         dgt = 0;
-                        sprintf((char*)adr, "%05u", g_table[g_current].address);
+                        //sprintf((char*)adr, "%05u", g_table[g_current].address);
+                        adr2s(adr, g_table[g_current].address);
                         draw_view(adr);
                         lcd_set_cursor(0, (2 + dgt), false, true);
                     } else {
                         m_opt = Value;
                         dgt = 0;
-                        sprintf((char*)adr, "%05u", g_table[g_current].address);
+                        //sprintf((char*)adr, "%05u", g_table[g_current].address);
+                        adr2s(adr, g_table[g_current].address);
                         top = g_table[g_current].address / 10000;
                         switch (top) {
                         case 0:
                         case 1:
-                            sprintf((char*)val, "%u", (g_table[g_current].data[0] & 0x0001U));
+                            //sprintf((char*)val, "%u", (g_table[g_current].data[0] & 0x0001U));
+                            if (g_table[g_current].data[0] & 0x0001U)
+                                val[0] = (uint8_t)'1';
+                            else
+                                val[0] = (uint8_t)'0';
+                            val[1] = 0;
                             break;
                 //        case 3:
                 //        case 4:
@@ -1402,8 +1449,8 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                         break;
                     m_opt = Edit;
                     m_timer_b = m_timer;
-                    //strcpy((char*)val, (const char*)g_buf);
-                    sprintf((char*)val, "%05u", g_id);
+                    //sprintf((char*)val, "%05u", g_id);
+                    id2s(val, g_id);
                     m_wiring_b = m_wiring;
                     m_baudrate_b = m_baudrate;
                     //m_databit_b = m_databit;
@@ -1433,13 +1480,15 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                         if (!g_table[g_current].registered) {
                             m_opt = Address;
                             dgt = 0;
-                            sprintf((char*)adr, "%05u", g_table[g_current].address);
+                            //sprintf((char*)adr, "%05u", g_table[g_current].address);
+                            adr2s(adr, g_table[g_current].address);
                             draw_view(adr);
                             g_row = 0;
                             lcd_set_cursor(g_row, (2 + dgt), false, true);
                         } else {
                             m_opt = View;
-                            sprintf((char*)adr, "%05u", g_table[g_current].address);
+                            //sprintf((char*)adr, "%05u", g_table[g_current].address);
+                            adr2s(adr, g_table[g_current].address);
                             draw_view(adr);
                             g_row = m_row_b;
                             lcd_set_cursor(g_row, 0, true, false);
@@ -1490,13 +1539,15 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                     if (!g_table[g_current].registered) {
                         m_opt = Address;
                         dgt = 0;
-                        sprintf((char*)adr, "%05u", g_table[g_current].address);
+                        //sprintf((char*)adr, "%05u", g_table[g_current].address);
+                        adr2s(adr, g_table[g_current].address);
                         draw_view(adr);
                         g_row = 0;
                         lcd_set_cursor(g_row, (2 + dgt), false, true);
                     } else {
                         m_opt = View;
-                        sprintf((char*)adr, "%05u", g_table[g_current].address);
+                        //sprintf((char*)adr, "%05u", g_table[g_current].address);
+                        adr2s(adr, g_table[g_current].address);
                         draw_view(adr);
                         g_row = m_row_b;
                         lcd_set_cursor(g_row, 0, true, false);
@@ -1536,8 +1587,8 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                 draw_item_timer(m_timer);
                 break;
             case TargetID:
-                sprintf((char*)id, "%u", g_id);
-                //sprintf((char*)g_buf, "%05u", g_id);
+                //sprintf((char*)id, "%u", g_id);
+                id2s(id, g_id);
                 lcd_draw_text(1, id);
                 break;
             case Wiring:
@@ -1569,9 +1620,30 @@ __attribute__ ((section (".subtext"))) void main_task(intptr_t exinf)
                         ftmp /= 1000;
                         tmp = (uint16_t)(ftmp * 100.0);
                     }
-                    sprintf((char*)bat, "%u%%", tmp);
-                    lcd_draw_text(1, (uint8_t*)bat);
+                    //sprintf((char*)bat, "%u%%", tmp);
+                    if (tmp < 10) {
+                        bat[0] = (uint8_t)'0' + (uint8_t)((tmp / 1) % 10);
+                        bat[1] = (uint8_t)'%';
+                        bat[2] = 0;
+                    } else
+                    if (tmp < 100) {
+                        bat[0] = (uint8_t)'0' + (uint8_t)((tmp / 10) % 10);
+                        bat[1] = (uint8_t)'0' + (uint8_t)((tmp / 1) % 10);
+                        bat[2] = (uint8_t)'%';
+                        bat[3] = 0;
+                    } else {
+                        bat[0] = (uint8_t)'0' + (uint8_t)((tmp / 100) % 10);
+                        bat[1] = (uint8_t)'0' + (uint8_t)((tmp / 10) % 10);
+                        bat[2] = (uint8_t)'0' + (uint8_t)((tmp / 1) % 10);
+                        bat[3] = (uint8_t)'%';
+                        bat[4] = 0;
+                    }
+                } else {
+                    bat[0] = (uint8_t)'0';
+                    bat[1] = (uint8_t)'%';
+                    bat[2] = 0;
                 }
+                lcd_draw_text(1, (uint8_t*)bat);
                 break;
             //case Version:
             default:
@@ -1648,7 +1720,7 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
             }
             if (top != top_b) {
                 top_b = top;
-                sprintf((char*)g_buf, "%u", false);
+                snprintf((char*)g_buf, 17, "%u", false);
             }
             g_err = modbus_read_status(
                     fnc,
@@ -1660,8 +1732,8 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
                     );
             if (g_err != E_OK)
                 break;
-            sprintf((char*)buf, "%u", (g_table[g_current].data[0] & 0x0001U));
-            sprintf((char*)g_buf, "%u", (g_table[g_current].data[0] & 0x0001U));
+            snprintf((char*)buf, 17, "%u", (g_table[g_current].data[0] & 0x0001U));
+            snprintf((char*)g_buf, 17, "%u", (g_table[g_current].data[0] & 0x0001U));
             wai_sem(SEM_DRW);
             if (g_hold == 0) {
                 lcd_set_cursor(g_row, 0, false, false);
@@ -1685,7 +1757,7 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
                 if ((top != top_b) || (g_dsp != dsp_b)) {
                     top_b = top;
                     dsp_b = g_dsp;
-                    sprintf((char*)g_buf, "%05u", 0);
+                    snprintf((char*)g_buf, 17, "%05u", 0);
                 }
                 num = 1;
                 break;
@@ -1693,7 +1765,7 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
                 if ((top != top_b) || (g_dsp != dsp_b)) {
                     top_b = top;
                     dsp_b = g_dsp;
-                    sprintf((char*)g_buf, "%04X", 0);
+                    snprintf((char*)g_buf, 17, "%04X", 0);
                 }
                 num = 1;
                 break;
@@ -1712,7 +1784,7 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
                 if ((top != top_b) || (g_dsp != dsp_b)) {
                     top_b = top;
                     dsp_b = g_dsp;
-                    sprintf((char*)g_buf, "%+011ld", (long)0);
+                    snprintf((char*)g_buf, 17, "%+011ld", (long)0);
                 }
                 num = 2;
                 break;
@@ -1721,7 +1793,7 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
                 if ((top != top_b) || (g_dsp != dsp_b)) {
                     top_b = top;
                     dsp_b = g_dsp;
-                    sprintf((char*)g_buf, "%+f", 0.0);
+                    snprintf((char*)g_buf, 17, "%+f", 0.0);
                 }
                 num = 2;
                 break;
@@ -1730,7 +1802,7 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
                 if ((top != top_b) || (g_dsp != dsp_b)) {
                     top_b = top;
                     dsp_b = g_dsp;
-                    sprintf((char*)g_buf, "%+f", 0.0);
+                    snprintf((char*)g_buf, 17, "%+f", 0.0);
                 }
                 num = 4;
                 break;
@@ -1739,7 +1811,7 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
                 if ((top != top_b) || (g_dsp != dsp_b)) {
                     top_b = top;
                     dsp_b = g_dsp;
-                    sprintf((char*)g_buf, "%+06d", 0);
+                    snprintf((char*)g_buf, 17, "%+06d", 0);
                 }
                 num = 1;
                 break;
@@ -1756,12 +1828,12 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
                 break;
             switch (g_dsp) {
             case Unsigned:
-                sprintf((char*)buf, "%u", g_table[g_current].data[0]);
-                sprintf((char*)g_buf, "%05u", g_table[g_current].data[0]);
+                snprintf((char*)buf, 17, "%u", g_table[g_current].data[0]);
+                snprintf((char*)g_buf, 17, "%05u", g_table[g_current].data[0]);
                 break;
             case Hex:
-                sprintf((char*)buf, "%X", g_table[g_current].data[0]);
-                sprintf((char*)g_buf, "%04X", g_table[g_current].data[0]);
+                snprintf((char*)buf, 17, "%X", g_table[g_current].data[0]);
+                snprintf((char*)g_buf, 17, "%04X", g_table[g_current].data[0]);
                 break;
             case Binary:
                 for (i = 0; i < 16; i++) {
@@ -1775,22 +1847,22 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
                 break;
             case Long:
                 memcpy(&ltmp, &g_table[g_current].data[0], sizeof(long));
-                sprintf((char*)buf, "%ld", ltmp);
-                sprintf((char*)g_buf, "%+011ld", ltmp);
+                snprintf((char*)buf, 17, "%ld", ltmp);
+                snprintf((char*)g_buf, 17, "%+011ld", ltmp);
                break;
             case Long_Inverse:
                 reg[1] = g_table[g_current].data[0];
                 reg[0] = g_table[g_current].data[1];
                 memcpy(&ltmp, &reg[0], sizeof(long));
-                sprintf((char*)buf, "%ld", ltmp);
-                sprintf((char*)g_buf, "%+011ld", ltmp);
+                snprintf((char*)buf, 17, "%ld", ltmp);
+                snprintf((char*)g_buf, 17, "%+011ld", ltmp);
                 break;
             case Float:
                 memcpy(&ftmp, &g_table[g_current].data[0], sizeof(float));
                 if (snprintf((char*)buf, 17, "%.6f", ftmp) > 15)
                     strcpy((char*)buf, "<Overflowed>    ");
                 if (snprintf((char*)g_buf, 17, "%+f", ftmp) > 16)
-                    sprintf((char*)g_buf, "%+f", 0.0);
+                    snprintf((char*)g_buf, 17, "%+f", 0.0);
                break;
             case Float_Inverse:
                 reg[1] = g_table[g_current].data[0];
@@ -1799,14 +1871,14 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
                 if (snprintf((char*)buf, 17, "%.6f", ftmp) > 15)
                     strcpy((char*)buf, "<Overflowed>    ");
                 if (snprintf((char*)g_buf, 17, "%+f", ftmp) > 16)
-                    sprintf((char*)g_buf, "%+f", 0.0);
+                    snprintf((char*)g_buf, 17, "%+f", 0.0);
                 break;
             case Double:
                 memcpy(&dtmp, &g_table[g_current].data[0], sizeof(double));
                 if (snprintf((char*)buf, 17, "%.6f", (float)dtmp) > 15)
                     strcpy((char*)buf, "<Overflowed>    ");
                 if (snprintf((char*)g_buf, 17, "%+f", (float)dtmp) > 16)
-                    sprintf((char*)g_buf, "%+f", 0.0);
+                    snprintf((char*)g_buf, 17, "%+f", 0.0);
                 break;
             case Double_Inverse:
                 reg[3] = g_table[g_current].data[0];
@@ -1817,12 +1889,12 @@ __attribute__ ((section (".subtext"))) void poll_task(intptr_t exinf)
                 if (snprintf((char*)buf, 17, "%.6f", (float)dtmp) > 15)
                     strcpy((char*)buf, "<Overflowed>    ");
                 if (snprintf((char*)g_buf, 17, "%+f", (float)dtmp) > 16)
-                    sprintf((char*)g_buf, "%+f", 0.0);
+                    snprintf((char*)g_buf, 17, "%+f", 0.0);
                 break;
             //case Signed:
             default:
-                sprintf((char*)buf, "%d", g_table[g_current].data[0]);
-                sprintf((char*)g_buf, "%+06d", g_table[g_current].data[0]);
+                snprintf((char*)buf, 17, "%d", g_table[g_current].data[0]);
+                snprintf((char*)g_buf, 17, "%+06d", g_table[g_current].data[0]);
                break;
             }
             wai_sem(SEM_DRW);
